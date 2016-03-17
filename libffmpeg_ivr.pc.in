@@ -1,0 +1,13 @@
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+libdir=@libdir@
+includedir=@includedir@
+
+Name: libffmpeg_ivr
+URL: http://www.opensight.cn/
+Description: The ffmpeg extension for IVR application
+Version: @PACKAGE_VERSION@
+Requires: 
+Requires.private: libavformat >= 56.40.100, libavutil >= 54.31.100
+Libs: -L${libdir} -lffmpeg_ivr -lpthread
+Cflags: -I${includedir} -pthread

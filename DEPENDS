@@ -1,0 +1,35 @@
+StreamSwitch make use of many other open source projects for its components. 
+
+The following lists all the projects/libraries which StreamSwitch depends 
+on for each of its components.
+
+You can visit the following page of StreamSwitch's wiki to download the source 
+packages of the following projects:
+
+    https://github.com/OpenSight/StreamSwitch/wiki/Depends-Download 
+
+1. Base depends
+
+    * zeromq >= 4.0.0
+    * czmq >= 3.0.0
+    * protobuf >= 2.6.0
+    
+
+2. stsw_rtmp_source depends
+  
+    * RTMPDump >= 2.3
+    
+
+3. stsw_rtsp_port depends
+
+    * libev >= 4.0
+    * libnetembryo >= 0.1.0
+    * glib-2.0 >= 2.16
+    
+4. ffmpeg_demuxer_source depends
+
+    * ffmpeg >= 2.8
+
+5. ffmpeg_sender depends
+
+    * ffmpeg >= 2.8    
