@@ -8,6 +8,6 @@ URL: http://www.opensight.cn/
 Description: The ffmpeg extension for IVR application
 Version: @PACKAGE_VERSION@
 Requires: 
-Requires.private: libavformat >= 56.40.100, libavutil >= 54.31.100
+Requires.private: libavformat >= 56.40.100, libavutil >= 54.31.100, libcurl >= 7.19.7
 Libs: -L${libdir} -lffmpeg_ivr -lpthread
 Cflags: -I${includedir} -pthread
