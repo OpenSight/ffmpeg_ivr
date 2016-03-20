@@ -15,28 +15,24 @@ AM_SILENT_RULES
 
 
 LT_PREREQ([2.2])
+LT_INIT()
 AC_PROG_LIBTOOL
 
-AC_CONFIG_SRCDIR([include/ffmpeg_ivr.h])
-# AC_CONFIG_HEADERS([config.h])
-
-
-# With feature list
-AC_ARG_WITH([cseg-recorder],
-[AS_HELP_STRING([--with-cseg-recorder],
-[would contains the cseg_recorder program @<:@default=yes@:>@])],
-[cseg_recorder=${withval}], [cseg_recorder=yes])
-
-AM_CONDITIONAL([INCLUDE_CSEG_RECORDER], [test "x$cseg_recorder" = xyes])
+AC_CONFIG_SRCDIR([include/libffmpeg_ivr.h])
+AC_CONFIG_HEADERS([config.h])
 
 
 
 # Checks for programs.
 AC_PROG_CXX
+AC_PROG_AWK
 AC_PROG_CC
+AC_PROG_CPP
+AC_PROG_INSTALL
+AC_PROG_LN_S
 AC_PROG_MAKE_SET
 # AC_PROG_RANLIB
-AM_PROG_CC_C_O
+
 
 # Set some default features required by ffmpeg_ivr code.
 CPPFLAGS="-D_REENTRANT -D_THREAD_SAFE $CPPFLAGS"
@@ -49,6 +45,7 @@ AC_CHECK_LIB([pthread], [pthread_create])
 
 export PKG_CONFIG_PATH=/usr/lib/pkgconfig:/usr/lib64/pkgconfig:/lib/pkgconfig:/lib64/pkgconfig:/usr/local/lib/pkgconfig:/usr/local/lib64/pkgconfig
 
+# PKG checks
 
 PKG_CHECK_MODULES(libcurl, [libcurl >= 7.19.0])
 AC_SUBST(libcurl_LIBS)
@@ -58,31 +55,67 @@ AC_SUBST(libcurl_CFLAGS)
 PKG_CHECK_MODULES(libavformat, [libavformat >= 56.40.100])
 PKG_CHECK_MODULES(libavutil, [libavutil >= 54.31.0])  
 PKG_CHECK_MODULES(libavcodec, [libavcodec >= 56.60.100])  
+PKG_CHECK_MODULES(libavfilter, [libavfilter >= 5.40.100])  
+PKG_CHECK_MODULES(libswscale, [libswscale >= 3.1.100])  
+PKG_CHECK_MODULES(libswresample, [libswresample >= 1.2.100])  
+PKG_CHECK_MODULES(libavdevice, [libavdevice >= 56.4.100])  
 AC_SUBST(libavformat_LIBS)
 AC_SUBST(libavformat_CFLAGS)
 AC_SUBST(libavutil_LIBS)
 AC_SUBST(libavutil_CFLAGS)
-
-
-
+AC_SUBST(libavcodec_LIBS)
+AC_SUBST(libavcodec_CFLAGS)
+AC_SUBST(libavfilter_LIBS)
+AC_SUBST(libavfilter_CFLAGS)
+AC_SUBST(libswscale_LIBS)
+AC_SUBST(libswscale_CFLAGS)
+AC_SUBST(libswresample_LIBS)
+AC_SUBST(libswresample_CFLAGS)
+AC_SUBST(libavdevice_LIBS)
+AC_SUBST(libavdevice_CFLAGS)
 
 
 # Checks for header files.
-AC_CHECK_HEADERS([fcntl.h stdint.h stdlib.h string.h sys/time.h unistd.h])
+AC_CHECK_HEADERS([fcntl.h float.h limits.h stdint.h stdlib.h string.h sys/ioctl.h sys/time.h sys/select.h sys/resource.h termios.h unistd.h])
+AC_CHECK_HEADERS([pthread.h], AC_DEFINE([HAVE_PTHREADS], [1], [make use of pthread in transcoding]))
 
 
 # Checks for typedefs, structures, and compiler characteristics.
-AC_HEADER_STDBOOL
 AC_C_INLINE
 AC_TYPE_INT32_T
 AC_TYPE_INT64_T
-AC_TYPE_OFF_T
+AC_TYPE_INT8_T
 AC_TYPE_SIZE_T
+AC_TYPE_UINT16_T
 AC_TYPE_UINT32_T
 AC_TYPE_UINT64_T
+AC_TYPE_UINT8_T
 
 # Checks for library functions.
-AC_CHECK_FUNCS([dup2 gettimeofday memset strtol])
+AC_CHECK_FUNCS([floor gettimeofday localtime_r memmove memset pow select strchr strcspn strerror strrchr strstr strtol])
+
+
+
+# Self define macro
+AC_DEFINE([CONFIG_THIS_YEAR], [2016], [PROJECT COMPILE YEAR])
+AC_DEFINE([FFMPEG_CONFIGURATION], ["UNKONW"], [ffmpeg configuration])
+AC_DEFINE([FFMPEG_DATADIR], ["/usr/local/ffmpeg_data"], [DATA DIR CONFIGURE])
+AC_DEFINE([CONFIG_AVUTIL], [1], [support libavutil])
+AC_DEFINE([CONFIG_THIS_YEAR], [2016], [PROJECT COMPILE YEAR])
+AC_DEFINE([CONFIG_AVUTIL], [1], [support libavutil])
+AC_DEFINE([CONFIG_AVCODEC], [1], [support libavcodec])
+AC_DEFINE([CONFIG_AVFILTER], [1], [support libavfilter])
+AC_DEFINE([CONFIG_AVFORMAT], [1], [support libavformat])
+AC_DEFINE([CONFIG_AVDEVICE], [1], [support libavdevice])
+AC_DEFINE([CONFIG_AVRESAMPLE], [0], [not support libavresample])
+AC_DEFINE([CONFIG_POSTPROC], [0], [not support libpostproc])
+AC_DEFINE([CONFIG_SWRESAMPLE], [1], [support libswresample])
+AC_DEFINE([CONFIG_SWSCALE], [1], [support libswscale])
+AC_DEFINE([CONFIG_NETWORK], [0], [not support ffmpeg network related function])
+AC_DEFINE([CC_IDENT], ["gcc"], [only gcc])
+AC_DEFINE([AVCONV_DATADIR], ["/usr/local/avconv_data"], [DATA DIR CONFIGURE])
+AC_DEFINE([FFMPEG_IVR], [1], [identify in ffmpeg_ivr compilation context])
+
 
 # generate Makefiles 
 AC_CONFIG_FILES([Makefile \
@@ -104,7 +137,6 @@ ffmpeg_ivr library path ............... : $libdir
 ffmpeg_ivr include path ............... : $includedir
 ffmpeg_ivr program path ............... : $bindir
 
-cseg_recorder included................. : $cseg_recorder
 
 
 

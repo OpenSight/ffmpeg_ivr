@@ -1,11 +1,9 @@
 /**
- * This file is part of ffmpeg_sender, which belongs to StreamSwitch
- * project. 
+ * This file is part of ffmpeg_ivr
  * 
- * Copyright (C) 2014  OpenSight (www.opensight.cn)
+ * Copyright (C) 2016  OpenSight (www.opensight.cn)
  * 
- * StreamSwitch is an extensible and scalable media stream server for 
- * multi-protocol environment. 
+ * ffmpeg_ivr is an extension of ffmpeg to implements the new feature for IVR
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published
