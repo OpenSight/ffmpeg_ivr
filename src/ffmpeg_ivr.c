@@ -4198,11 +4198,8 @@ int main(int argc, char **argv)
            decode_error_stat[0], decode_error_stat[1]);
     if ((decode_error_stat[0] + decode_error_stat[1]) * max_error_rate < decode_error_stat[1])
         exit_program(69);
-#ifdef FFMPEG_IVR
-    //when receive a signal, exit with 0 means exit normal
-    exit_program(received_nb_signals ? 0 : main_return_code);
-#else
+
     exit_program(received_nb_signals ? 255 : main_return_code);
-#endif
+
     return main_return_code;
 }
