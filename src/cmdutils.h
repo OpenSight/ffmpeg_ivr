@@ -95,6 +95,10 @@ int opt_default(void *optctx, const char *opt, const char *arg);
  */
 int opt_loglevel(void *optctx, const char *opt, const char *arg);
 
+#ifdef FFMPEG_IVR
+int opt_null(void *optctx, const char *opt, const char *arg);
+#endif
+
 int opt_report(const char *opt);
 
 int opt_max_alloc(void *optctx, const char *opt, const char *arg);
@@ -342,6 +346,12 @@ void uninit_parse_context(OptionParseContext *octx);
  */
 void parse_loglevel(int argc, char **argv, const OptionDef *options);
 
+#ifdef FFMPEG_IVR
+/**
+ * Find the '-log_rotate' option in the command line args and apply it.
+ */
+int parse_log_rotate(int argc, char **argv, const OptionDef *options);
+#endif
 /**
  * Return index of option opt in argv or 0 if not found.
  */

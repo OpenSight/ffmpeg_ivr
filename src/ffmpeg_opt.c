@@ -22,6 +22,7 @@
 
 #include <stdint.h>
 
+#include "config.h"
 
 #include "ffmpeg_ivr.h"
 

@@ -101,7 +101,7 @@ libffmpeg_ivr_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC \
 PROGRAMS = $(bin_PROGRAMS)
 am_ffmpeg_ivr_OBJECTS = src/cmdutils.$(OBJEXT) \
 	src/ffmpeg_ivr.$(OBJEXT) src/ffmpeg_filter.$(OBJEXT) \
-	src/ffmpeg_opt.$(OBJEXT)
+	src/ffmpeg_opt.$(OBJEXT) src/ivr_rotate_logger.$(OBJEXT)
 ffmpeg_ivr_OBJECTS = $(am_ffmpeg_ivr_OBJECTS)
 ffmpeg_ivr_DEPENDENCIES = $(builddir)/libffmpeg_ivr.la
 DEFAULT_INCLUDES = -I.@am__isrc@
@@ -351,7 +351,9 @@ ffmpeg_ivr_SOURCES = src/cmdutils.c \
     src/ffmpeg_ivr.c \
     src/ffmpeg_ivr.h \
     src/ffmpeg_filter.c \
-    src/ffmpeg_opt.c
+    src/ffmpeg_opt.c \
+    src/ivr_rotate_logger.c \
+    src/ivr_rotate_logger.h
 
 ffmpeg_ivr_LDADD = $(builddir)/libffmpeg_ivr.la
 all: config.h
@@ -530,6 +532,8 @@ src/ffmpeg_filter.$(OBJEXT): src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
 src/ffmpeg_opt.$(OBJEXT): src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
+src/ivr_rotate_logger.$(OBJEXT): src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
 ffmpeg_ivr$(EXEEXT): $(ffmpeg_ivr_OBJECTS) $(ffmpeg_ivr_DEPENDENCIES) 
 	@rm -f ffmpeg_ivr$(EXEEXT)
 	$(AM_V_CCLD)$(LINK) $(ffmpeg_ivr_OBJECTS) $(ffmpeg_ivr_LDADD) $(LIBS)
@@ -540,6 +544,7 @@ mostlyclean-compile:
 	-rm -f src/ffmpeg_filter.$(OBJEXT)
 	-rm -f src/ffmpeg_ivr.$(OBJEXT)
 	-rm -f src/ffmpeg_opt.$(OBJEXT)
+	-rm -f src/ivr_rotate_logger.$(OBJEXT)
 	-rm -f src/libffmpeg_ivr/cJSON.$(OBJEXT)
 	-rm -f src/libffmpeg_ivr/cJSON.lo
 	-rm -f src/libffmpeg_ivr/cached_segment.$(OBJEXT)
@@ -560,6 +565,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/ffmpeg_filter.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/ffmpeg_ivr.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/ffmpeg_opt.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/ivr_rotate_logger.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/libffmpeg_ivr/$(DEPDIR)/cJSON.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/libffmpeg_ivr/$(DEPDIR)/cached_segment.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/libffmpeg_ivr/$(DEPDIR)/register.Plo@am__quote@
