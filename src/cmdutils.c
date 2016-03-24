@@ -78,7 +78,11 @@ AVDictionary *format_opts, *codec_opts, *resample_opts;
 
 static FILE *report_file;
 static int report_file_level = AV_LOG_DEBUG;
+#ifdef FFMPEG_IVR
+int hide_banner = 1;
+#else
 int hide_banner = 0;
+#endif
 
 void init_opts(void)
 {
