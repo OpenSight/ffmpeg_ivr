@@ -34,7 +34,7 @@
 #define REGISTER_CSEG_WRITER(x)                                            \
     {                                                                   \
         extern CachedSegmentWriter cseg_##x##_writer;                           \
-        av_register_output_format(&cseg_##x##_writer);                 \
+        register_segment_writer(&cseg_##x##_writer);                 \
     }
 
 

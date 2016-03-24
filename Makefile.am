@@ -40,7 +40,9 @@ ffmpeg_ivr_SOURCES = src/cmdutils.c \
     src/ffmpeg_ivr.c \
     src/ffmpeg_ivr.h \
     src/ffmpeg_filter.c \
-    src/ffmpeg_opt.c
+    src/ffmpeg_opt.c \
+    src/ivr_rotate_logger.c \
+    src/ivr_rotate_logger.h
     
 
 ffmpeg_ivr_LDADD = $(builddir)/libffmpeg_ivr.la

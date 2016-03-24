@@ -18,6 +18,9 @@
     { "sample_fmts", OPT_EXIT, {.func_arg = show_sample_fmts }, "show available audio sample formats" },
     { "colors"     , OPT_EXIT, {.func_arg = show_colors },      "show available color names" },
     { "loglevel"   , HAS_ARG,  {.func_arg = opt_loglevel},      "set logging level", "loglevel" },
+#ifdef FFMPEG_IVR    
+    { "log_rotate" , HAS_ARG,  {.func_arg = opt_null},      "set auto-rotate logger params", "FILENAME:SIZE:ROTATE_NUM" },    
+#endif
     { "v",           HAS_ARG,  {.func_arg = opt_loglevel},      "set logging level", "loglevel" },
     { "report"     , 0,        {(void*)opt_report}, "generate a report" },
     { "max_alloc"  , HAS_ARG,  {.func_arg = opt_max_alloc},     "set maximum size of a single allocated block", "bytes" },
