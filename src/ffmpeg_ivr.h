@@ -27,6 +27,10 @@
 #include <stdio.h>
 #include <signal.h>
 
+#ifdef FFMPEG_IVR
+#include <time.h>
+#endif
+
 #if HAVE_PTHREADS
 #include <pthread.h>
 #endif
@@ -363,6 +367,11 @@ typedef struct InputFile {
     int joined;                 /* the thread has been joined */
     int thread_queue_size;      /* maximum number of queued packets */
 #endif
+
+#ifdef FFMPEG_IVR
+    struct timespec io_start_ts;    
+#endif
+
 } InputFile;
 
 enum forced_keyframes_const {
@@ -529,6 +538,14 @@ extern const AVIOInterruptCB int_cb;
 
 extern const OptionDef options[];
 extern const HWAccel hwaccels[];
+
+
+#ifdef FFMPEG_IVR
+extern int input_io_timeout;
+int input_interrupt_cb(void *arg);
+void input_start_io(InputFile *f);
+void input_stop_io(InputFile *f);
+#endif
 
 
 void term_init(void);

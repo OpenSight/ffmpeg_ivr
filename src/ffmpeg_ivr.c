@@ -478,6 +478,26 @@ static int read_key(void)
 #endif
     return -1;
 }
+#ifdef FFMPEG_IVR
+int input_interrupt_cb(void *arg)
+{
+    InputFile *f = (InputFile *)arg;
+    if(received_nb_signals > transcode_init_done){
+        return 1;
+    }
+    
+    if(input_io_timeout > 0 && f != NULL && f->io_start_ts.tv_sec != 0){
+        struct timespec cur_ts;
+        clock_gettime(CLOCK_MONOTONIC, &cur_ts);
+        uint64_t io_dur = (cur_ts.tv_sec - f->io_start_ts.tv_sec) * 1000 +
+              (cur_ts.tv_nsec - f->io_start_ts.tv_nsec) / 1000000;       
+        if(io_dur >= (uint64_t)input_io_timeout){
+            return 1;
+        }
+    }    
+    return 0;
+}
+#endif
 
 static int decode_interrupt_cb(void *ctx)
 {
@@ -3510,6 +3530,19 @@ static int check_keyboard_interaction(int64_t cur_time)
     }
     return 0;
 }
+#ifdef FFMPEG_IVR
+void input_start_io(InputFile *f)
+{
+    clock_gettime(CLOCK_MONOTONIC, &(f->io_start_ts));
+    
+}
+void input_stop_io(InputFile *f)
+{
+    f->io_start_ts.tv_sec = 0;
+    f->io_start_ts.tv_nsec = 0;
+}
+#endif
+
 
 #if HAVE_PTHREADS
 static void *input_thread(void *arg)
@@ -3520,8 +3553,14 @@ static void *input_thread(void *arg)
 
     while (1) {
         AVPacket pkt;
+        
+#ifdef FFMPEG_IVR
+        input_start_io(f);
+        ret = av_read_frame(f->ctx, &pkt);        
+        input_stop_io(f);
+#else        
         ret = av_read_frame(f->ctx, &pkt);
-
+#endif
         if (ret == AVERROR(EAGAIN)) {
             av_usleep(10000);
             continue;
@@ -3626,7 +3665,17 @@ static int get_input_packet(InputFile *f, AVPacket *pkt)
     if (nb_input_files > 1)
         return get_input_packet_mt(f, pkt);
 #endif
+#ifdef FFMPEG_IVR
+    do{
+        int ret = 0;
+        input_start_io(f);
+        ret = av_read_frame(f->ctx, pkt);        
+        input_stop_io(f);
+        return ret;
+    }while(0);
+#else   
     return av_read_frame(f->ctx, pkt);
+#endif
 }
 
 static int got_eagain(void)

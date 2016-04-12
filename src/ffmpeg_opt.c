@@ -116,6 +116,9 @@ int stdin_interaction = 1;
 int frame_bits_per_raw_sample = 0;
 float max_error_rate  = 2.0/3;
 
+#ifdef FFMPEG_IVR
+int input_io_timeout = 0;   //default is 0, disable input io timeout check
+#endif
 
 static int intra_only         = 0;
 static int file_overwrite     = 0;
@@ -869,6 +872,11 @@ static int open_input_file(OptionsContext *o, const char *filename)
         print_error(filename, AVERROR(ENOMEM));
         exit_program(1);
     }
+#ifdef FFMPEG_IVR    
+    f = av_mallocz(sizeof(*f));
+    if (!f)
+        exit_program(1);  
+#endif    
     if (o->nb_audio_sample_rate) {
         av_dict_set_int(&o->g->format_opts, "sample_rate", o->audio_sample_rate[o->nb_audio_sample_rate - 1].u.i, 0);
     }
@@ -922,14 +930,25 @@ static int open_input_file(OptionsContext *o, const char *filename)
         av_format_set_data_codec(ic, find_codec_or_die(data_codec_name, AVMEDIA_TYPE_DATA, 0));
 
     ic->flags |= AVFMT_FLAG_NONBLOCK;
+#ifdef FFMPEG_IVR  
+    ic->interrupt_callback.callback = input_interrupt_cb;
+    ic->interrupt_callback.opaque = f;
+#else    
     ic->interrupt_callback = int_cb;
+#endif    
 
     if (!av_dict_get(o->g->format_opts, "scan_all_pmts", NULL, AV_DICT_MATCH_CASE)) {
         av_dict_set(&o->g->format_opts, "scan_all_pmts", "1", AV_DICT_DONT_OVERWRITE);
         scan_all_pmts_set = 1;
     }
     /* open the input file with generic avformat function */
+#ifdef FFMPEG_IVR  
+    input_start_io(f);
     err = avformat_open_input(&ic, filename, file_iformat, &o->g->format_opts);
+    input_stop_io(f);
+#else    
+    err = avformat_open_input(&ic, filename, file_iformat, &o->g->format_opts);
+#endif
     if (err < 0) {
         print_error(filename, err);
         exit_program(1);
@@ -949,7 +968,13 @@ static int open_input_file(OptionsContext *o, const char *filename)
 
     /* If not enough info to get the stream parameters, we decode the
        first frames to get it. (used in mpeg case for example) */
+#ifdef FFMPEG_IVR    
+    input_start_io(f);
     ret = avformat_find_stream_info(ic, opts);
+    input_stop_io(f);
+#else
+    ret = avformat_find_stream_info(ic, opts);
+#endif
     if (ret < 0) {
         av_log(NULL, AV_LOG_FATAL, "%s: could not find codec parameters\n", filename);
         if (ic->nb_streams == 0) {
@@ -998,9 +1023,11 @@ static int open_input_file(OptionsContext *o, const char *filename)
     av_dump_format(ic, nb_input_files, filename, 0);
 
     GROW_ARRAY(input_files, nb_input_files);
+#ifndef FFMPEG_IVR        
     f = av_mallocz(sizeof(*f));
     if (!f)
         exit_program(1);
+#endif
     input_files[nb_input_files - 1] = f;
 
     f->ctx        = ic;
@@ -3011,6 +3038,12 @@ const OptionDef options[] = {
     { "f",              HAS_ARG | OPT_STRING | OPT_OFFSET |
                         OPT_INPUT | OPT_OUTPUT,                      { .off       = OFFSET(format) },
         "force format", "fmt" },
+        
+#ifdef FFMPEG_IVR        
+    { "input_io_timeout",         HAS_ARG | OPT_INT | OPT_EXPERT,              { &input_io_timeout },
+        "the max io time (in milliseconds) for read a packet from input file, default is 0 means disabled", "msec" },   
+#endif     
+
     { "y",              OPT_BOOL,                                    {              &file_overwrite },
         "overwrite output files" },
     { "n",              OPT_BOOL,                                    {              &no_file_overwrite },
