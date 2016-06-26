@@ -774,13 +774,22 @@ static int cseg_write_trailer(struct AVFormatContext *s)
                 cseg->cur_segment = NULL;                
             }
             pthread_mutex_unlock(&cseg->mutex); 
-        }else{
-            pthread_mutex_unlock(&cseg->mutex);  
-            //set seg_start_ts if not set   
-            if(cseg->seg_start_ts < 0.0){
-                cseg->seg_start_ts = cseg->start_ts;
-                
+        }else if(cseg->seg_start_ts < 0.0){
+            //Jamken(2016-06-26): if seg_start_ts is not set, 
+            // means the current segment is the first segment and has not finished,
+            // don't write this single unfinished segment to avoid record fragmentation
+
+            if(cseg->cur_segment != NULL){
+                cached_segment_reset(cseg->cur_segment);
+                put_segment_list(&(cseg->free_list), cseg->cur_segment);
+                cseg->cur_segment = NULL;                
             }
+            pthread_mutex_unlock(&cseg->mutex);             
+
+        }else{
+            
+            
+            pthread_mutex_unlock(&cseg->mutex);  
             append_cur_segment(s, cseg->seg_start_ts, cseg->duration, 
                                cseg->start_pos, 
                                cseg->sequence++); // lose the control of av_free cseg->cur_segment            
