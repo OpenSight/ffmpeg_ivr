@@ -779,15 +779,14 @@ static int cseg_write_trailer(struct AVFormatContext *s)
             // means the current segment is the first segment and has not finished,
             // don't write this single unfinished segment to avoid record fragmentation
 
-            if(cseg->cur_segment != NULL){                
-                av_log(s, AV_LOG_ERROR,
-                    "drop the current single unfinished segment\n"); 
-                   
+            if(cseg->cur_segment != NULL){
                 cached_segment_reset(cseg->cur_segment);
                 put_segment_list(&(cseg->free_list), cseg->cur_segment);
                 cseg->cur_segment = NULL;                
             }
-            pthread_mutex_unlock(&cseg->mutex);             
+            pthread_mutex_unlock(&cseg->mutex);   
+            av_log(s, AV_LOG_ERROR,
+                    "drop the current single unfinished segment\n");           
 
         }else{
             
