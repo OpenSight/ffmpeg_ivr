@@ -15,9 +15,6 @@
 
 @SET_MAKE@
 
-
-
-
 VPATH = @srcdir@
 pkgdatadir = $(datadir)/@PACKAGE@
 pkgincludedir = $(includedir)/@PACKAGE@
@@ -39,9 +36,8 @@ build_triplet = @build@
 host_triplet = @host@
 bin_PROGRAMS = ffmpeg_ivr$(EXEEXT)
 subdir = .
-DIST_COMMON = $(am__configure_deps) $(include_HEADERS) \
-	$(srcdir)/Makefile.am $(srcdir)/Makefile.in \
-	$(srcdir)/config.h.in $(srcdir)/libffmpeg_ivr.pc.in \
+DIST_COMMON = $(am__configure_deps) $(srcdir)/Makefile.am \
+	$(srcdir)/Makefile.in $(srcdir)/config.h.in \
 	$(top_srcdir)/configure AUTHORS ChangeLog INSTALL \
 	config/compile config/config.guess config/config.sub \
 	config/depcomp config/install-sh config/ltmain.sh \
@@ -57,53 +53,19 @@ am__CONFIG_DISTCLEAN_FILES = config.status config.cache config.log \
  configure.lineno config.status.lineno
 mkinstalldirs = $(install_sh) -d
 CONFIG_HEADER = config.h
-CONFIG_CLEAN_FILES = libffmpeg_ivr.pc
+CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
-am__vpath_adj_setup = srcdirstrip=`echo "$(srcdir)" | sed 's|.|.|g'`;
-am__vpath_adj = case $$p in \
-    $(srcdir)/*) f=`echo "$$p" | sed "s|^$$srcdirstrip/||"`;; \
-    *) f=$$p;; \
-  esac;
-am__strip_dir = f=`echo $$p | sed -e 's|^.*/||'`;
-am__install_max = 40
-am__nobase_strip_setup = \
-  srcdirstrip=`echo "$(srcdir)" | sed 's/[].[^$$\\*|]/\\\\&/g'`
-am__nobase_strip = \
-  for p in $$list; do echo "$$p"; done | sed -e "s|$$srcdirstrip/||"
-am__nobase_list = $(am__nobase_strip_setup); \
-  for p in $$list; do echo "$$p $$p"; done | \
-  sed "s| $$srcdirstrip/| |;"' / .*\//!s/ .*/ ./; s,\( .*\)/[^/]*$$,\1,' | \
-  $(AWK) 'BEGIN { files["."] = "" } { files[$$2] = files[$$2] " " $$1; \
-    if (++n[$$2] == $(am__install_max)) \
-      { print $$2, files[$$2]; n[$$2] = 0; files[$$2] = "" } } \
-    END { for (dir in files) print dir, files[dir] }'
-am__base_list = \
-  sed '$$!N;$$!N;$$!N;$$!N;$$!N;$$!N;$$!N;s/\n/ /g' | \
-  sed '$$!N;$$!N;$$!N;$$!N;s/\n/ /g'
-am__installdirs = "$(DESTDIR)$(libdir)" "$(DESTDIR)$(bindir)" \
-	"$(DESTDIR)$(pkgconfigdir)" "$(DESTDIR)$(includedir)"
-LTLIBRARIES = $(lib_LTLIBRARIES)
-libffmpeg_ivr_la_LIBADD =
-am__dirstamp = $(am__leading_dot)dirstamp
-am_libffmpeg_ivr_la_OBJECTS = src/libffmpeg_ivr/register.lo \
-	src/libffmpeg_ivr/cached_segment.lo src/libffmpeg_ivr/cJSON.lo \
-	src/libffmpeg_ivr/seg_writers/cseg_dummy_writer.lo \
-	src/libffmpeg_ivr/seg_writers/cseg_file_writer.lo \
-	src/libffmpeg_ivr/seg_writers/cseg_ivr_writer.lo
-libffmpeg_ivr_la_OBJECTS = $(am_libffmpeg_ivr_la_OBJECTS)
-AM_V_lt = $(am__v_lt_$(V))
-am__v_lt_ = $(am__v_lt_$(AM_DEFAULT_VERBOSITY))
-am__v_lt_0 = --silent
-libffmpeg_ivr_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC \
-	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link $(CCLD) \
-	$(AM_CFLAGS) $(CFLAGS) $(libffmpeg_ivr_la_LDFLAGS) $(LDFLAGS) \
-	-o $@
+am__installdirs = "$(DESTDIR)$(bindir)"
 PROGRAMS = $(bin_PROGRAMS)
+am__dirstamp = $(am__leading_dot)dirstamp
 am_ffmpeg_ivr_OBJECTS = src/cmdutils.$(OBJEXT) \
 	src/ffmpeg_ivr.$(OBJEXT) src/ffmpeg_filter.$(OBJEXT) \
 	src/ffmpeg_opt.$(OBJEXT) src/ivr_rotate_logger.$(OBJEXT)
 ffmpeg_ivr_OBJECTS = $(am_ffmpeg_ivr_OBJECTS)
-ffmpeg_ivr_DEPENDENCIES = $(builddir)/libffmpeg_ivr.la
+ffmpeg_ivr_DEPENDENCIES = $(builddir)/libffmpeg_ivr/libffmpeg_ivr.la
+AM_V_lt = $(am__v_lt_$(V))
+am__v_lt_ = $(am__v_lt_$(AM_DEFAULT_VERBOSITY))
+am__v_lt_0 = --silent
 DEFAULT_INCLUDES = -I.@am__isrc@
 depcomp = $(SHELL) $(top_srcdir)/config/depcomp
 am__depfiles_maybe = depfiles
@@ -130,8 +92,8 @@ am__v_CCLD_0 = @echo "  CCLD  " $@;
 AM_V_GEN = $(am__v_GEN_$(V))
 am__v_GEN_ = $(am__v_GEN_$(AM_DEFAULT_VERBOSITY))
 am__v_GEN_0 = @echo "  GEN   " $@;
-SOURCES = $(libffmpeg_ivr_la_SOURCES) $(ffmpeg_ivr_SOURCES)
-DIST_SOURCES = $(libffmpeg_ivr_la_SOURCES) $(ffmpeg_ivr_SOURCES)
+SOURCES = $(ffmpeg_ivr_SOURCES)
+DIST_SOURCES = $(ffmpeg_ivr_SOURCES)
 RECURSIVE_TARGETS = all-recursive check-recursive dvi-recursive \
 	html-recursive info-recursive install-data-recursive \
 	install-dvi-recursive install-exec-recursive \
@@ -139,8 +101,6 @@ RECURSIVE_TARGETS = all-recursive check-recursive dvi-recursive \
 	install-pdf-recursive install-ps-recursive install-recursive \
 	installcheck-recursive installdirs-recursive pdf-recursive \
 	ps-recursive uninstall-recursive
-DATA = $(pkgconfig_DATA)
-HEADERS = $(include_HEADERS)
 RECURSIVE_CLEAN_TARGETS = mostlyclean-recursive clean-recursive	\
   distclean-recursive maintainer-clean-recursive
 AM_RECURSIVE_TARGETS = $(RECURSIVE_TARGETS:-recursive=) \
@@ -321,7 +281,7 @@ top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 AUTOMAKE_OPTIONS = foreign subdir-objects
 ACLOCAL_AMFLAGS = -I m4
-AM_CPPFLAGS = -I$(srcdir)/include -I$(srcdir)/src
+AM_CPPFLAGS = -I$(srcdir)/libffmpeg_ivr -I$(srcdir)/src
 AM_CFLAGS = $(libcurl_CFLAGS) $(libavformat_CFLAGS) $(libavutil_CFLAGS) \
     $(libavcodec_CFLAGS) $(libavfilter_CFLAGS) $(libswscale_CFLAGS) $(libswresample_CFLAGS)  \
     $(libavdevice_CFLAGS)
@@ -330,21 +290,7 @@ AM_LDFLAGS = $(libcurl_LIBS) $(libavformat_LIBS) $(libavutil_LIBS) \
     $(libavcodec_LIBS) $(libavfilter_LIBS) $(libswscale_LIBS) $(libswresample_LIBS) \
     $(libavdevice_LIBS)
 
-pkgconfigdir = $(libdir)/pkgconfig
-pkgconfig_DATA = libffmpeg_ivr.pc
-SUBDIRS = . 
-lib_LTLIBRARIES = libffmpeg_ivr.la
-libffmpeg_ivr_la_SOURCES = src/libffmpeg_ivr/register.c \
-    src/libffmpeg_ivr/cached_segment.c \
-    src/libffmpeg_ivr/cached_segment.h \
-    src/libffmpeg_ivr/cJSON.c \
-    src/libffmpeg_ivr/cJSON.h \
-    src/libffmpeg_ivr/seg_writers/cseg_dummy_writer.c \
-    src/libffmpeg_ivr/seg_writers/cseg_file_writer.c \
-    src/libffmpeg_ivr/seg_writers/cseg_ivr_writer.c
-
-libffmpeg_ivr_la_LDFLAGS = -version-info 0:0:0 $(AM_LDFLAGS)   
-include_HEADERS = include/libffmpeg_ivr.h
+SUBDIRS = libffmpeg_ivr . 
 ffmpeg_ivr_SOURCES = src/cmdutils.c \
     src/cmdutils.h \
     src/cmdutils_common_opts.h \
@@ -355,7 +301,7 @@ ffmpeg_ivr_SOURCES = src/cmdutils.c \
     src/ivr_rotate_logger.c \
     src/ivr_rotate_logger.h
 
-ffmpeg_ivr_LDADD = $(builddir)/libffmpeg_ivr.la
+ffmpeg_ivr_LDADD = $(builddir)/libffmpeg_ivr/libffmpeg_ivr.la
 all: config.h
 	$(MAKE) $(AM_MAKEFLAGS) all-recursive
 
@@ -412,69 +358,6 @@ $(srcdir)/config.h.in: @MAINTAINER_MODE_TRUE@ $(am__configure_deps)
 
 distclean-hdr:
 	-rm -f config.h stamp-h1
-libffmpeg_ivr.pc: $(top_builddir)/config.status $(srcdir)/libffmpeg_ivr.pc.in
-	cd $(top_builddir) && $(SHELL) ./config.status $@
-install-libLTLIBRARIES: $(lib_LTLIBRARIES)
-	@$(NORMAL_INSTALL)
-	test -z "$(libdir)" || $(MKDIR_P) "$(DESTDIR)$(libdir)"
-	@list='$(lib_LTLIBRARIES)'; test -n "$(libdir)" || list=; \
-	list2=; for p in $$list; do \
-	  if test -f $$p; then \
-	    list2="$$list2 $$p"; \
-	  else :; fi; \
-	done; \
-	test -z "$$list2" || { \
-	  echo " $(LIBTOOL) $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=install $(INSTALL) $(INSTALL_STRIP_FLAG) $$list2 '$(DESTDIR)$(libdir)'"; \
-	  $(LIBTOOL) $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=install $(INSTALL) $(INSTALL_STRIP_FLAG) $$list2 "$(DESTDIR)$(libdir)"; \
-	}
-
-uninstall-libLTLIBRARIES:
-	@$(NORMAL_UNINSTALL)
-	@list='$(lib_LTLIBRARIES)'; test -n "$(libdir)" || list=; \
-	for p in $$list; do \
-	  $(am__strip_dir) \
-	  echo " $(LIBTOOL) $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=uninstall rm -f '$(DESTDIR)$(libdir)/$$f'"; \
-	  $(LIBTOOL) $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=uninstall rm -f "$(DESTDIR)$(libdir)/$$f"; \
-	done
-
-clean-libLTLIBRARIES:
-	-test -z "$(lib_LTLIBRARIES)" || rm -f $(lib_LTLIBRARIES)
-	@list='$(lib_LTLIBRARIES)'; for p in $$list; do \
-	  dir="`echo $$p | sed -e 's|/[^/]*$$||'`"; \
-	  test "$$dir" != "$$p" || dir=.; \
-	  echo "rm -f \"$${dir}/so_locations\""; \
-	  rm -f "$${dir}/so_locations"; \
-	done
-src/libffmpeg_ivr/$(am__dirstamp):
-	@$(MKDIR_P) src/libffmpeg_ivr
-	@: > src/libffmpeg_ivr/$(am__dirstamp)
-src/libffmpeg_ivr/$(DEPDIR)/$(am__dirstamp):
-	@$(MKDIR_P) src/libffmpeg_ivr/$(DEPDIR)
-	@: > src/libffmpeg_ivr/$(DEPDIR)/$(am__dirstamp)
-src/libffmpeg_ivr/register.lo: src/libffmpeg_ivr/$(am__dirstamp) \
-	src/libffmpeg_ivr/$(DEPDIR)/$(am__dirstamp)
-src/libffmpeg_ivr/cached_segment.lo:  \
-	src/libffmpeg_ivr/$(am__dirstamp) \
-	src/libffmpeg_ivr/$(DEPDIR)/$(am__dirstamp)
-src/libffmpeg_ivr/cJSON.lo: src/libffmpeg_ivr/$(am__dirstamp) \
-	src/libffmpeg_ivr/$(DEPDIR)/$(am__dirstamp)
-src/libffmpeg_ivr/seg_writers/$(am__dirstamp):
-	@$(MKDIR_P) src/libffmpeg_ivr/seg_writers
-	@: > src/libffmpeg_ivr/seg_writers/$(am__dirstamp)
-src/libffmpeg_ivr/seg_writers/$(DEPDIR)/$(am__dirstamp):
-	@$(MKDIR_P) src/libffmpeg_ivr/seg_writers/$(DEPDIR)
-	@: > src/libffmpeg_ivr/seg_writers/$(DEPDIR)/$(am__dirstamp)
-src/libffmpeg_ivr/seg_writers/cseg_dummy_writer.lo:  \
-	src/libffmpeg_ivr/seg_writers/$(am__dirstamp) \
-	src/libffmpeg_ivr/seg_writers/$(DEPDIR)/$(am__dirstamp)
-src/libffmpeg_ivr/seg_writers/cseg_file_writer.lo:  \
-	src/libffmpeg_ivr/seg_writers/$(am__dirstamp) \
-	src/libffmpeg_ivr/seg_writers/$(DEPDIR)/$(am__dirstamp)
-src/libffmpeg_ivr/seg_writers/cseg_ivr_writer.lo:  \
-	src/libffmpeg_ivr/seg_writers/$(am__dirstamp) \
-	src/libffmpeg_ivr/seg_writers/$(DEPDIR)/$(am__dirstamp)
-libffmpeg_ivr.la: $(libffmpeg_ivr_la_OBJECTS) $(libffmpeg_ivr_la_DEPENDENCIES) 
-	$(AM_V_CCLD)$(libffmpeg_ivr_la_LINK) -rpath $(libdir) $(libffmpeg_ivr_la_OBJECTS) $(libffmpeg_ivr_la_LIBADD) $(LIBS)
 install-binPROGRAMS: $(bin_PROGRAMS)
 	@$(NORMAL_INSTALL)
 	test -z "$(bindir)" || $(MKDIR_P) "$(DESTDIR)$(bindir)"
@@ -545,18 +428,6 @@ mostlyclean-compile:
 	-rm -f src/ffmpeg_ivr.$(OBJEXT)
 	-rm -f src/ffmpeg_opt.$(OBJEXT)
 	-rm -f src/ivr_rotate_logger.$(OBJEXT)
-	-rm -f src/libffmpeg_ivr/cJSON.$(OBJEXT)
-	-rm -f src/libffmpeg_ivr/cJSON.lo
-	-rm -f src/libffmpeg_ivr/cached_segment.$(OBJEXT)
-	-rm -f src/libffmpeg_ivr/cached_segment.lo
-	-rm -f src/libffmpeg_ivr/register.$(OBJEXT)
-	-rm -f src/libffmpeg_ivr/register.lo
-	-rm -f src/libffmpeg_ivr/seg_writers/cseg_dummy_writer.$(OBJEXT)
-	-rm -f src/libffmpeg_ivr/seg_writers/cseg_dummy_writer.lo
-	-rm -f src/libffmpeg_ivr/seg_writers/cseg_file_writer.$(OBJEXT)
-	-rm -f src/libffmpeg_ivr/seg_writers/cseg_file_writer.lo
-	-rm -f src/libffmpeg_ivr/seg_writers/cseg_ivr_writer.$(OBJEXT)
-	-rm -f src/libffmpeg_ivr/seg_writers/cseg_ivr_writer.lo
 
 distclean-compile:
 	-rm -f *.tab.c
@@ -566,12 +437,6 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/ffmpeg_ivr.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/ffmpeg_opt.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/ivr_rotate_logger.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@src/libffmpeg_ivr/$(DEPDIR)/cJSON.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@src/libffmpeg_ivr/$(DEPDIR)/cached_segment.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@src/libffmpeg_ivr/$(DEPDIR)/register.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@src/libffmpeg_ivr/seg_writers/$(DEPDIR)/cseg_dummy_writer.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@src/libffmpeg_ivr/seg_writers/$(DEPDIR)/cseg_file_writer.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@src/libffmpeg_ivr/seg_writers/$(DEPDIR)/cseg_ivr_writer.Plo@am__quote@
 
 .c.o:
 @am__fastdepCC_TRUE@	$(AM_V_CC)depbase=`echo $@ | sed 's|[^/]*$$|$(DEPDIR)/&|;s|\.o$$||'`;\
@@ -605,51 +470,9 @@ mostlyclean-libtool:
 
 clean-libtool:
 	-rm -rf .libs _libs
-	-rm -rf src/libffmpeg_ivr/.libs src/libffmpeg_ivr/_libs
-	-rm -rf src/libffmpeg_ivr/seg_writers/.libs src/libffmpeg_ivr/seg_writers/_libs
 
 distclean-libtool:
 	-rm -f libtool config.lt
-install-pkgconfigDATA: $(pkgconfig_DATA)
-	@$(NORMAL_INSTALL)
-	test -z "$(pkgconfigdir)" || $(MKDIR_P) "$(DESTDIR)$(pkgconfigdir)"
-	@list='$(pkgconfig_DATA)'; test -n "$(pkgconfigdir)" || list=; \
-	for p in $$list; do \
-	  if test -f "$$p"; then d=; else d="$(srcdir)/"; fi; \
-	  echo "$$d$$p"; \
-	done | $(am__base_list) | \
-	while read files; do \
-	  echo " $(INSTALL_DATA) $$files '$(DESTDIR)$(pkgconfigdir)'"; \
-	  $(INSTALL_DATA) $$files "$(DESTDIR)$(pkgconfigdir)" || exit $$?; \
-	done
-
-uninstall-pkgconfigDATA:
-	@$(NORMAL_UNINSTALL)
-	@list='$(pkgconfig_DATA)'; test -n "$(pkgconfigdir)" || list=; \
-	files=`for p in $$list; do echo $$p; done | sed -e 's|^.*/||'`; \
-	test -n "$$files" || exit 0; \
-	echo " ( cd '$(DESTDIR)$(pkgconfigdir)' && rm -f" $$files ")"; \
-	cd "$(DESTDIR)$(pkgconfigdir)" && rm -f $$files
-install-includeHEADERS: $(include_HEADERS)
-	@$(NORMAL_INSTALL)
-	test -z "$(includedir)" || $(MKDIR_P) "$(DESTDIR)$(includedir)"
-	@list='$(include_HEADERS)'; test -n "$(includedir)" || list=; \
-	for p in $$list; do \
-	  if test -f "$$p"; then d=; else d="$(srcdir)/"; fi; \
-	  echo "$$d$$p"; \
-	done | $(am__base_list) | \
-	while read files; do \
-	  echo " $(INSTALL_HEADER) $$files '$(DESTDIR)$(includedir)'"; \
-	  $(INSTALL_HEADER) $$files "$(DESTDIR)$(includedir)" || exit $$?; \
-	done
-
-uninstall-includeHEADERS:
-	@$(NORMAL_UNINSTALL)
-	@list='$(include_HEADERS)'; test -n "$(includedir)" || list=; \
-	files=`for p in $$list; do echo $$p; done | sed -e 's|^.*/||'`; \
-	test -n "$$files" || exit 0; \
-	echo " ( cd '$(DESTDIR)$(includedir)' && rm -f" $$files ")"; \
-	cd "$(DESTDIR)$(includedir)" && rm -f $$files
 
 # This directory's subdirectories are mostly independent; you can cd
 # into them and run `make' without going through this Makefile.
@@ -963,13 +786,10 @@ distcleancheck: distclean
 	       exit 1; } >&2
 check-am: all-am
 check: check-recursive
-all-am: Makefile $(LTLIBRARIES) $(PROGRAMS) $(DATA) $(HEADERS) \
-		config.h
-install-binPROGRAMS: install-libLTLIBRARIES
-
+all-am: Makefile $(PROGRAMS) config.h
 installdirs: installdirs-recursive
 installdirs-am:
-	for dir in "$(DESTDIR)$(libdir)" "$(DESTDIR)$(bindir)" "$(DESTDIR)$(pkgconfigdir)" "$(DESTDIR)$(includedir)"; do \
+	for dir in "$(DESTDIR)$(bindir)"; do \
 	  test -z "$$dir" || $(MKDIR_P) "$$dir"; \
 	done
 install: install-recursive
@@ -995,22 +815,17 @@ distclean-generic:
 	-test . = "$(srcdir)" || test -z "$(CONFIG_CLEAN_VPATH_FILES)" || rm -f $(CONFIG_CLEAN_VPATH_FILES)
 	-rm -f src/$(DEPDIR)/$(am__dirstamp)
 	-rm -f src/$(am__dirstamp)
-	-rm -f src/libffmpeg_ivr/$(DEPDIR)/$(am__dirstamp)
-	-rm -f src/libffmpeg_ivr/$(am__dirstamp)
-	-rm -f src/libffmpeg_ivr/seg_writers/$(DEPDIR)/$(am__dirstamp)
-	-rm -f src/libffmpeg_ivr/seg_writers/$(am__dirstamp)
 
 maintainer-clean-generic:
 	@echo "This command is intended for maintainers to use"
 	@echo "it deletes files that may require special tools to rebuild."
 clean: clean-recursive
 
-clean-am: clean-binPROGRAMS clean-generic clean-libLTLIBRARIES \
-	clean-libtool mostlyclean-am
+clean-am: clean-binPROGRAMS clean-generic clean-libtool mostlyclean-am
 
 distclean: distclean-recursive
 	-rm -f $(am__CONFIG_DISTCLEAN_FILES)
-	-rm -rf src/$(DEPDIR) src/libffmpeg_ivr/$(DEPDIR) src/libffmpeg_ivr/seg_writers/$(DEPDIR)
+	-rm -rf src/$(DEPDIR)
 	-rm -f Makefile
 distclean-am: clean-am distclean-compile distclean-generic \
 	distclean-hdr distclean-libtool distclean-tags
@@ -1027,13 +842,13 @@ info: info-recursive
 
 info-am:
 
-install-data-am: install-includeHEADERS install-pkgconfigDATA
+install-data-am:
 
 install-dvi: install-dvi-recursive
 
 install-dvi-am:
 
-install-exec-am: install-binPROGRAMS install-libLTLIBRARIES
+install-exec-am: install-binPROGRAMS
 
 install-html: install-html-recursive
 
@@ -1058,7 +873,7 @@ installcheck-am:
 maintainer-clean: maintainer-clean-recursive
 	-rm -f $(am__CONFIG_DISTCLEAN_FILES)
 	-rm -rf $(top_srcdir)/autom4te.cache
-	-rm -rf src/$(DEPDIR) src/libffmpeg_ivr/$(DEPDIR) src/libffmpeg_ivr/seg_writers/$(DEPDIR)
+	-rm -rf src/$(DEPDIR)
 	-rm -f Makefile
 maintainer-clean-am: distclean-am maintainer-clean-generic
 
@@ -1075,32 +890,28 @@ ps: ps-recursive
 
 ps-am:
 
-uninstall-am: uninstall-binPROGRAMS uninstall-includeHEADERS \
-	uninstall-libLTLIBRARIES uninstall-pkgconfigDATA
+uninstall-am: uninstall-binPROGRAMS
 
 .MAKE: $(RECURSIVE_CLEAN_TARGETS) $(RECURSIVE_TARGETS) all \
 	ctags-recursive install-am install-strip tags-recursive
 
 .PHONY: $(RECURSIVE_CLEAN_TARGETS) $(RECURSIVE_TARGETS) CTAGS GTAGS \
 	all all-am am--refresh check check-am clean clean-binPROGRAMS \
-	clean-generic clean-libLTLIBRARIES clean-libtool ctags \
-	ctags-recursive dist dist-all dist-bzip2 dist-gzip dist-lzma \
-	dist-shar dist-tarZ dist-xz dist-zip distcheck distclean \
-	distclean-compile distclean-generic distclean-hdr \
-	distclean-libtool distclean-tags distcleancheck distdir \
-	distuninstallcheck dvi dvi-am html html-am info info-am \
-	install install-am install-binPROGRAMS install-data \
-	install-data-am install-dvi install-dvi-am install-exec \
-	install-exec-am install-html install-html-am \
-	install-includeHEADERS install-info install-info-am \
-	install-libLTLIBRARIES install-man install-pdf install-pdf-am \
-	install-pkgconfigDATA install-ps install-ps-am install-strip \
-	installcheck installcheck-am installdirs installdirs-am \
-	maintainer-clean maintainer-clean-generic mostlyclean \
-	mostlyclean-compile mostlyclean-generic mostlyclean-libtool \
-	pdf pdf-am ps ps-am tags tags-recursive uninstall uninstall-am \
-	uninstall-binPROGRAMS uninstall-includeHEADERS \
-	uninstall-libLTLIBRARIES uninstall-pkgconfigDATA
+	clean-generic clean-libtool ctags ctags-recursive dist \
+	dist-all dist-bzip2 dist-gzip dist-lzma dist-shar dist-tarZ \
+	dist-xz dist-zip distcheck distclean distclean-compile \
+	distclean-generic distclean-hdr distclean-libtool \
+	distclean-tags distcleancheck distdir distuninstallcheck dvi \
+	dvi-am html html-am info info-am install install-am \
+	install-binPROGRAMS install-data install-data-am install-dvi \
+	install-dvi-am install-exec install-exec-am install-html \
+	install-html-am install-info install-info-am install-man \
+	install-pdf install-pdf-am install-ps install-ps-am \
+	install-strip installcheck installcheck-am installdirs \
+	installdirs-am maintainer-clean maintainer-clean-generic \
+	mostlyclean mostlyclean-compile mostlyclean-generic \
+	mostlyclean-libtool pdf pdf-am ps ps-am tags tags-recursive \
+	uninstall uninstall-am uninstall-binPROGRAMS
 
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.

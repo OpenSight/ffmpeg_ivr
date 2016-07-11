@@ -18,7 +18,7 @@ LT_PREREQ([2.2])
 LT_INIT()
 AC_PROG_LIBTOOL
 
-AC_CONFIG_SRCDIR([include/libffmpeg_ivr.h])
+AC_CONFIG_SRCDIR([src/ffmpeg_ivr.c])
 AC_CONFIG_HEADERS([config.h])
 
 
@@ -119,7 +119,8 @@ AC_DEFINE([FFMPEG_IVR], [1], [identify in ffmpeg_ivr compilation context])
 
 # generate Makefiles 
 AC_CONFIG_FILES([Makefile \
-                 libffmpeg_ivr.pc])
+                 libffmpeg_ivr/Makefile \
+                 libffmpeg_ivr/libffmpeg_ivr.pc])
 
 # Generate other makefiles
 
