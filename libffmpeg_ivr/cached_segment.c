@@ -54,10 +54,12 @@ CachedSegment * cached_segment_alloc(uint32_t max_size)
     s = av_mallocz(sizeof(CachedSegment) + max_size);
     s->next = NULL;
     s->buffer_max_size = max_size;
-    s->start_ts = 0.0;
+    s->start_ts = -1.0;
     s->duration = 0.0;
     //s->buffer = av_malloc(max_size);
     s->size = 0;
+    s->start_pts = AV_NOPTS_VALUE;
+    
 /*    
     av_log(NULL, AV_LOG_WARNING, 
            "new segment(size:%d) allocated\n",
@@ -73,12 +75,13 @@ void cached_segment_free(CachedSegment * segment)
 
 void cached_segment_reset(CachedSegment * segment)
 {
-    segment->start_ts = 0.0;
+    segment->start_ts = -1.0;
     segment->duration = 0.0;
     segment->pos = 0;
     segment->next = NULL;
     segment->sequence = 0;
     segment->size = 0;
+    segment->start_pts = AV_NOPTS_VALUE;
 }
 int write_segment(void *opaque, uint8_t *buf, int buf_size)
 {  
@@ -183,8 +186,6 @@ static CachedSegmentWriter *find_segment_writer(char * filename)
 ////////////////////////////
 //cseg format operations
 
-
-
 static int ff_check_interrupt(AVIOInterruptCB *cb)
 {
     int ret;
@@ -218,11 +219,7 @@ static void recycle_free_segment(CachedSegmentContext *cseg, CachedSegment * seg
 }
 
 /* append current segment to the cached segment list */
-static int append_cur_segment(AVFormatContext *s, 
-                              double start_ts,
-                              double duration, 
-                              int64_t pos,
-                              int64_t sequence)
+static int append_cur_segment(AVFormatContext *s)
 {
     CachedSegmentContext *cseg = (CachedSegmentContext *)s->priv_data;
     CachedSegment * segment = cseg->cur_segment;
@@ -233,12 +230,7 @@ static int append_cur_segment(AVFormatContext *s,
     }
     
     cseg->cur_segment = NULL;
-    
-    segment->start_ts = start_ts;
-    segment->duration = duration;
-    segment->pos = pos;
-    segment->sequence = sequence;
-    
+       
     if(segment->start_ts <= 0.0 ||
        segment->duration < 1){
         //segment is invalid
@@ -448,7 +440,8 @@ static int cseg_start(AVFormatContext *s)
     oc->pb = avio_out;  
     oc->flags |= AVFMT_FLAG_CUSTOM_IO;
     cseg->cur_segment = segment;
-    cseg->number++;    
+    cseg->number++;   
+    segment->sequence = cseg->sequence++;
 
     if (oc->oformat->priv_class && oc->priv_data)
         av_opt_set(oc->priv_data, "mpegts_flags", "resend_headers", 0);
@@ -471,11 +464,10 @@ static int cseg_write_header(AVFormatContext *s)
     pthread_cond_init(&cseg->not_empty, NULL);
     cseg->sequence       = cseg->start_sequence;
     cseg->recording_time = cseg->time * AV_TIME_BASE;
-    cseg->start_pts = cseg->end_pts = AV_NOPTS_VALUE;
+    cseg->start_pts = AV_NOPTS_VALUE;
     cseg->start_pos = 0;
     cseg->number = 0;
     cseg->consumer_exit_code = 0;
-    cseg->seg_start_ts = -1.0;
 
     if (cseg->format_options_str) {
         ret = av_dict_parse_string(&cseg->format_options, cseg->format_options_str, "=", ":", 0);
@@ -681,19 +673,32 @@ static int cseg_write_packet(AVFormatContext *s, AVPacket *pkt)
 
     if (cseg->start_pts == AV_NOPTS_VALUE) {
         cseg->start_pts = pkt->pts;
-        cseg->end_pts   = pkt->pts;
+        if(cseg->start_pts != AV_NOPTS_VALUE){
+            //start_pts is ready, check start_ts
+            if(cseg->start_ts < 0.0){
+                //get current time for start ts
+                struct timeval tv;
+                gettimeofday(&tv, NULL);
+                if(tv.tv_sec < 31536000){   //not valid
+                    cseg->start_pts = AV_NOPTS_VALUE;
+                    av_log(s, AV_LOG_ERROR, 
+                           "gettimeofday error, the timestamp is invalid\n");                     
+                    return AVERROR_EXIT;
+                }
+                cseg->start_ts = (double)tv.tv_sec + ((double)tv.tv_usec) / 1000000.0;
+            }//if(cseg->start_ts < 0.0){
+        }//if(cseg->start_pts != AV_NOPTS_VALUE){
+    }//if (cseg->start_pts == AV_NOPTS_VALUE) {
+        
+    if(cseg->cur_segment->start_pts == AV_NOPTS_VALUE){
+        cseg->cur_segment->start_pts = pkt->pts;
+        if(cseg->cur_segment->start_pts != AV_NOPTS_VALUE && 
+           cseg->cur_segment->start_ts <= 0.0){
+            cseg->cur_segment->start_ts = cseg->start_ts;          
+        }        
     }
     
-    if(cseg->start_pts != AV_NOPTS_VALUE){
-        //start_pts is ready, check start_ts
-        if(cseg->start_ts < 0.0){
-            //get current time for start ts
-            struct timeval tv;
-            gettimeofday(&tv, NULL);
-            cseg->start_ts = (double)tv.tv_sec + ((double)tv.tv_usec) / 1000000.0;
-        }
-    }
-    
+   
     if (cseg->has_video) {
         can_split = st->codec->codec_type == AVMEDIA_TYPE_VIDEO &&
                     pkt->flags & AV_PKT_FLAG_KEY;
@@ -703,9 +708,10 @@ static int cseg_write_packet(AVFormatContext *s, AVPacket *pkt)
     if (pkt->pts == AV_NOPTS_VALUE)
         is_ref_pkt = can_split = 0;
 
-    if (is_ref_pkt)
-        cseg->duration = (double)(pkt->pts - cseg->end_pts)
+    if (is_ref_pkt){
+        cseg->cur_segment->duration = (double)(pkt->pts - cseg->cur_segment->start_pts)
                                    * st->time_base.num / st->time_base.den;
+    }
 
     if (can_split && av_compare_ts(pkt->pts - cseg->start_pts, st->time_base,
                                    end_pts, AV_TIME_BASE_Q) >= 0) {
@@ -715,36 +721,32 @@ static int cseg_write_packet(AVFormatContext *s, AVPacket *pkt)
                (long long)pkt->pts, (long long)cseg->start_pts, (long long)cseg->end_pts, (long long)end_pts);
 */
         if (oc->pb) {
-            double seg_start_ts;
             int64_t cur_segment_size = 0;
             
             avio_flush(oc->pb);
             av_freep(&(oc->pb));
                 
             cur_segment_size = cseg->cur_segment->size;
-            if(cseg->seg_start_ts < 0.0){
-                cseg->seg_start_ts = cseg->start_ts;
-            }
-            ret = append_cur_segment(s, cseg->seg_start_ts, cseg->duration, 
-                                     cseg->start_pos, 
-                                     cseg->sequence++); // lose the control of av_free cseg->cur_segment
+
+            ret = append_cur_segment(s); // lose the control of cseg->cur_segment
             if (ret < 0)
                 return ret;                
             cseg->start_pos += cur_segment_size;
         }
         
-
-        cseg->end_pts = pkt->pts;
-        
-        cseg->seg_start_ts = (double)(cseg->end_pts - cseg->start_pts)
-                                   * st->time_base.num / st->time_base.den + cseg->start_ts;        
-        cseg->duration = 0;
-
+       
+        //init new segment
         ret = cseg_start(s);
         if (ret < 0)
             return ret;
+        cseg->cur_segment->start_ts = (double)(pkt->pts - cseg->start_pts)
+                                            * st->time_base.num / st->time_base.den + cseg->start_ts;        
+        cseg->cur_segment->pos = cseg->start_pos;
+        cseg->cur_segment->start_pts = pkt->pts;
+        cseg->cur_segment->duration = 0.0;
+        
     }//if (can_split && av_compare_ts(pkt->pts - cseg->start_pts, st->time_base,
-
+    
     ret = cseg_ff_write_chained(oc, stream_index, pkt, s, 0);
 
     return ret;
@@ -774,8 +776,8 @@ static int cseg_write_trailer(struct AVFormatContext *s)
                 cseg->cur_segment = NULL;                
             }
             pthread_mutex_unlock(&cseg->mutex); 
-        }else if(cseg->seg_start_ts < 0.0){
-            //Jamken(2016-06-26): if seg_start_ts is not set, 
+        }else if(cseg->number <= 1){
+            //Jam(2016-07-12): if cseg->number equals 1, 
             // means the current segment is the first segment and has not finished,
             // don't write this single unfinished segment to avoid record fragmentation
 
@@ -790,11 +792,8 @@ static int cseg_write_trailer(struct AVFormatContext *s)
 
         }else{
             
-            
             pthread_mutex_unlock(&cseg->mutex);  
-            append_cur_segment(s, cseg->seg_start_ts, cseg->duration, 
-                               cseg->start_pos, 
-                               cseg->sequence++); // lose the control of av_free cseg->cur_segment            
+            append_cur_segment(s); // lose the control of cseg->cur_segment            
         }
     }//if (oc->pb) {
           
