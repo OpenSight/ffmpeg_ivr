@@ -28,17 +28,8 @@
 #include <math.h>
 #include <stdio.h>
 
-#include "libavutil/avassert.h"
-#include "libavutil/mathematics.h"
-#include "libavutil/parseutils.h"
-#include "libavutil/avstring.h"
-#include "libavutil/opt.h"
-#include "libavutil/log.h"
-#include "libavutil/fifo.h"
-
-#include "libavformat/avformat.h"
-    
-#include "../cached_segment.h"
+#include "../config.h"    
+#include "../min_cached_segment.h"
 
 
 static int dummy_init(CachedSegmentContext *cseg)

@@ -32,11 +32,12 @@ extern "C" {
 #define FRAGMENT_SIZE  65535  //64KB
 #define FRAGMENT_BUF_SIZE   (FRAGMENT_SIZE - 16)   //16Bytes is used for fragment header
 
-#define SEGMENT_MAX_SIZE   2097152   //2MB
+#define SEGMENT_IO_BUFFER_SIZE 32768
+#define MAX_URL_SIZE 4096
 
-#define   av_malloc   malloc
-#define   av_free     free
-#define   av_log(level, fmt, args)   printf(fmt, ##args)
+//#define   av_malloc   malloc
+//#define   av_free     free
+//#define   av_log(level, fmt, args...)   fprintf(stderr, fmt, ##args)
 
 
 

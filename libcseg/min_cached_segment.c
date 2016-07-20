@@ -35,13 +35,13 @@
 #include "libavutil/fifo.h"
 
 #include "libavformat/avformat.h"
-    
-#include "cached_segment.h"
+
+#include "config.h"    
+#include "min_cached_segment.h"
 
 
 
-#define SEGMENT_IO_BUFFER_SIZE 32768
-#define MAX_URL_SIZE 4096
+
 
 #define MIN(a,b) ((a) > (b) ? (b) : (a))
 
@@ -99,7 +99,7 @@ void cached_segment_reset(CachedSegment * segment)
     segment->sequence = 0;
     segment->size = 0;
     segment->start_pts = AV_NOPTS_VALUE;
-    segment->tail = segment->head
+    segment->tail = segment->head;
 }
 
 int write_segment(void *opaque, uint8_t *buf, int buf_size)
@@ -126,8 +126,8 @@ int write_segment(void *opaque, uint8_t *buf, int buf_size)
     
     while(need_write){
         int tail_pos = segment->size % FRAGMENT_BUF_SIZE;
-        int left_space = FRAGMENT_BUF_SIZE - cur_pos;
-        int copy_size = (left_space > need_write)?need_write:left_space
+        int left_space = FRAGMENT_BUF_SIZE - tail_pos;
+        int copy_size = (left_space > need_write)?need_write:left_space;
         memcpy(segment->tail->buffer + tail_pos, buf, copy_size);
         buf += copy_size;
         segment->size += copy_size;

@@ -34,8 +34,8 @@
 
 #include "libavformat/avformat.h"
     
-#include "../cached_segment.h"
-#include "../cJSON.h"
+#include "../min_cached_segment.h"
+#include "../utils/cJSON.h"
 
 #define MIN(a,b) ((a) > (b) ? (b) : (a))
 

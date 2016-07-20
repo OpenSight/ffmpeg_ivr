@@ -28,20 +28,13 @@
 #include <math.h>
 #include <stdio.h>
 
-#include "libavutil/avassert.h"
-#include "libavutil/mathematics.h"
-#include "libavutil/parseutils.h"
-#include "libavutil/avstring.h"
-#include "libavutil/opt.h"
-#include "libavutil/log.h"
-#include "libavutil/fifo.h"
-#include "libavutil/dict.h"
 
-#include "libavformat/avformat.h"
-#include "libavformat/avio.h"    
-#include "../cached_segment.h"
 
-struct URLContext;
+#include "../config.h"
+#include "../min_cached_segment.h"
+
+
+#define MIN(a,b) ((a) > (b) ? (b) : (a))
 
 
 static int file_init(CachedSegmentContext *cseg)
@@ -57,13 +50,21 @@ static int file_write_segment(CachedSegmentContext *cseg, CachedSegment *segment
     char file_name[MAX_FILE_NAME];
     char ext_name[32] = "";
     char *p;
-    AVIOContext *file_context;
     int ret;
-    uint8_t *buf;
+    FILE * f;
+    int len;
+    fragment *cur_frag;
+    
     
     //printf("file_write_segment is calle\n");
-    
-    av_strlcpy(base_name, cseg->filename, MAX_FILE_NAME);
+    if(strncasecmp(cseg->filename, "file://", 7) == 0){
+        strncpy(base_name, cseg->filename + 7, MAX_FILE_NAME);        
+        
+    }else{
+        strncpy(base_name, cseg->filename, MAX_FILE_NAME);
+        
+    }
+    base_name[MAX_FILE_NAME - 1]='\0';
 
     p = strrchr(base_name, '/');  
     if(p){
@@ -78,19 +79,36 @@ static int file_write_segment(CachedSegmentContext *cseg, CachedSegment *segment
     snprintf(file_name, MAX_FILE_NAME - 1, "%s_%.3f_%.3f_%lld%s", 
              base_name, segment->start_ts, segment->duration, 
              (long long)segment->sequence, ext_name);
-    
-    ret = avio_open(&file_context, file_name, AVIO_FLAG_WRITE);
-    if(ret < 0){
-        return ret;
+             
+    f = fopen(file_name, "wb");
+    if(!f){
+        perror("Open File failed");
+        return -1;
     }
     
-    avio_write(file_context, segment->buffer, segment->size);
-    ret = file_context->error;
-    if(ret < 0){
-        avio_closep(&file_context);
-        return ret;
+    len = 0;
+    cur_frag = segment->head;
+    while(len < segment->size){
+        int to_write = MIN(segment->size - len, FRAGMENT_BUF_SIZE);
+        
+        if(cur_frag == NULL){
+            fclose(f);
+            fprintf(stderr, "segment is invalid");
+            return -1;
+        }
+        ret = fwrite(cur_frag->buffer, 1, to_write, f);
+        if(ret != to_write){
+            fclose(f);
+            perror("fwrite error(%s)");
+            return -1;
+        }
+        
+        len += to_write;
+        cur_frag = cur_frag->next;
+        ret = 0;        
     }
-    avio_closep(&file_context);
+
+    fclose(f);
     
     return 0;
 }

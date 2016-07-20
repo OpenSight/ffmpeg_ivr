@@ -120,7 +120,10 @@ AC_DEFINE([FFMPEG_IVR], [1], [identify in ffmpeg_ivr compilation context])
 # generate Makefiles 
 AC_CONFIG_FILES([Makefile \
                  libffmpeg_ivr/Makefile \
-                 libffmpeg_ivr/libffmpeg_ivr.pc])
+                 libffmpeg_ivr/libffmpeg_ivr.pc \
+                 libcseg/Makefile \
+                 libcseg/samples/Makefile \
+                 libcseg/libcseg.pc])
 
 # Generate other makefiles
 

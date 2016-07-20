@@ -5,7 +5,7 @@
 #define HTTP_CLIENT_BUFFER_SIZE     8192
 
 #include <stdio.h>
-#include "API/HTTPClient.h"
+#include "HTTPClient.h"
 
 typedef struct _HTTPParameters
 {

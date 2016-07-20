@@ -10,7 +10,7 @@ AM_LDFLAGS = $(libcurl_LIBS) $(libavformat_LIBS) $(libavutil_LIBS) \
     $(libavdevice_LIBS)
 
 
-SUBDIRS = libffmpeg_ivr . 
+SUBDIRS = libffmpeg_ivr libcseg . 
 
 
 

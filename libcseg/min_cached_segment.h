@@ -24,6 +24,8 @@
 #include <float.h>
 #include <stdint.h>
 #include <unistd.h>
+#include "libavformat/avformat.h"
+
 
 #include "config.h"
 

@@ -19128,7 +19128,7 @@ _ACEOF
 
 
 # generate Makefiles
-ac_config_files="$ac_config_files Makefile libffmpeg_ivr/Makefile libffmpeg_ivr/libffmpeg_ivr.pc"
+ac_config_files="$ac_config_files Makefile libffmpeg_ivr/Makefile libffmpeg_ivr/libffmpeg_ivr.pc libcseg/Makefile libcseg/samples/Makefile libcseg/libcseg.pc"
 
 
 # Generate other makefiles
@@ -20146,6 +20146,9 @@ do
     "Makefile") CONFIG_FILES="$CONFIG_FILES Makefile" ;;
     "libffmpeg_ivr/Makefile") CONFIG_FILES="$CONFIG_FILES libffmpeg_ivr/Makefile" ;;
     "libffmpeg_ivr/libffmpeg_ivr.pc") CONFIG_FILES="$CONFIG_FILES libffmpeg_ivr/libffmpeg_ivr.pc" ;;
+    "libcseg/Makefile") CONFIG_FILES="$CONFIG_FILES libcseg/Makefile" ;;
+    "libcseg/samples/Makefile") CONFIG_FILES="$CONFIG_FILES libcseg/samples/Makefile" ;;
+    "libcseg/libcseg.pc") CONFIG_FILES="$CONFIG_FILES libcseg/libcseg.pc" ;;
 
   *) { { $as_echo "$as_me:$LINENO: error: invalid argument: $ac_config_target" >&5
 $as_echo "$as_me: error: invalid argument: $ac_config_target" >&2;}
