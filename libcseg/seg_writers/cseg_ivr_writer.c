@@ -36,6 +36,7 @@
     
 #include "../min_cached_segment.h"
 #include "../utils/cJSON.h"
+#include "../utils/http_client/HTTPClient.h"
 
 #define MIN(a,b) ((a) > (b) ? (b) : (a))
 
@@ -108,99 +109,102 @@ static int http_post(char * http_uri,
     long status;
     HttpBuf http_buf;
     char err_buf[CURL_ERROR_SIZE] = "unknown";
+
+    int32_t                 status_code;
+    HTTP_CLIENT             HTTPClient;
+    HTTP_SESSION_HANDLE     pHTTP = 0;
+    int32_t                  nSize = 0,nTotal = 0;
+    
+    
+    pHTTP = HTTPClientOpenRequest(0);
+    if(!pHTTP){
+        ret = -HTTP_CLIENT_ERROR_NO_MEMORY;    
+        goto fail;           
+    }
+    
     
     memset(&http_buf, 0, sizeof(HttpBuf));
 
-    
-    
-    easyhandle = curl_easy_init();
-    if(easyhandle == NULL){
-        return AVERROR(ENOMEM);
-    }
-
-    if(curl_easy_setopt(easyhandle, CURLOPT_URL, http_uri)){
-        ret = AVERROR_EXTERNAL;
-        goto fail;                
-    }   
+    if((ret = HTTPClientSetVerb(pHTTP,VerbPost)) != HTTP_CLIENT_SUCCESS)
+    {
+        ret = -ret;
+        goto fail;
+    }    
     if(post_content_type != NULL){
-        memset(content_type_header, 0, 128);
-        snprintf(content_type_header, 127, 
-                 "Content-Type: %s", post_content_type);
-        headers = curl_slist_append(headers, content_type_header);
-        if(curl_easy_setopt(easyhandle, CURLOPT_HTTPHEADER, headers)){
-            ret = AVERROR_EXTERNAL;
-            goto fail;                
+        if((ret = HTTPClientAddRequestHeaders(pHTTP, "Content-Type", post_content_type, 0)) != HTTP_CLIENT_SUCCESS)
+        {
+            ret = -ret;
+            goto fail;
         }
-    }   
-    
-    if(curl_easy_setopt(easyhandle, CURLOPT_POSTFIELDS, post_data)){
-        ret = AVERROR_EXTERNAL;
-        goto fail;                
-    }  
-    if(curl_easy_setopt(easyhandle, CURLOPT_POSTFIELDSIZE, post_len)){
-        ret = AVERROR_EXTERNAL;
-        goto fail;                
-    }    
-    if(io_timeout > 0){
-        if(curl_easy_setopt(easyhandle, CURLOPT_TIMEOUT_MS , io_timeout)){
-            ret = AVERROR_EXTERNAL;
-            goto fail;                
-        }
-    }   
-    
-    if(result_buf != NULL && max_buf_size != 0){
-        http_buf.buf = result_buf;
-        http_buf.buf_size = max_buf_size;
-        http_buf.pos = 0;
-        
-        if(curl_easy_setopt(easyhandle, CURLOPT_WRITEFUNCTION, http_write_callback)){
-            ret = AVERROR_EXTERNAL;
-            goto fail;                
-        }
-        if(curl_easy_setopt(easyhandle, CURLOPT_WRITEDATA, &http_buf)){
-            ret = AVERROR_EXTERNAL;
-            goto fail;                
-        }
-    }
-    
-
-    if(curl_easy_setopt(easyhandle, CURLOPT_ERRORBUFFER, err_buf)){
-        ret = AVERROR_EXTERNAL;
-        goto fail;                
+    }else{
+        if((ret = HTTPClientAddRequestHeaders(pHTTP, 
+                                              "Content-Type", 
+                                              "application/x-www-form-urlencoded", 0)) != HTTP_CLIENT_SUCCESS)
+        {
+            ret = -ret;
+            goto fail;
+        }        
     }
 
+    if((ret = HTTPClientSendRequest(pHTTP, http_uri, post_data,
+                post_len,TRUE, io_timeout, 0)) != HTTP_CLIENT_SUCCESS)
+    {
+        ret = -ret
+        goto fail;
+    }     
     
- #ifdef ENABLE_CURLOPT_VERBOSE   
-    if(curl_easy_setopt(easyhandle, CURLOPT_VERBOSE, 1)){
-        ret = AVERROR_EXTERNAL;
-        goto fail;                
-    }    
- #endif
-        
-    if(curl_easy_perform(easyhandle)){
-        
-        ret = AVERROR_EXTERNAL;
+
+    // Retrieve the the headers and analyze them
+    if((ret = HTTPClientRecvResponse(pHTTP,io_timeout)) != HTTP_CLIENT_SUCCESS)
+    {
+        ret = -ret
         goto fail;
     }
-    
-    if(curl_easy_getinfo(easyhandle, CURLINFO_RESPONSE_CODE, &status)){
-        ret = AVERROR_EXTERNAL;
-        goto fail;
-    }    
-    
+    HTTPClientGetInfo(pHTTP, &HTTPClient);
     if(status_code){
-        *status_code = status;
+        *status_code = HTTPClient.HTTPStatusCode;
+    }    
+        
+
+    // Get the data until we get an error or end of stream code
+    // printf("Each dot represents %d bytes:\n",HTTP_BUFFER_SIZE );
+    nTotal = 0;
+    nSize = 0;
+    ret = HTTP_CLIENT_SUCCESS;
+    while(ret == HTTP_CLIENT_SUCCESS)
+    {
+        if(nTotal >= HTTPClient.TotalResponseBodyLength){ 
+           
+            break;
+        }
+        if(nTotal >= max_buf_size){
+            ret = HTTP_CLIENT_ERROR_NO_MEMORY;
+            break;
+        }
+            
+        // Set the size of our buffer
+        nSize = max_buf_size - nTotal;   
+
+        // Get the data
+        ret = HTTPClientReadData(pHTTP,result_buf+nTotal,nSize,io_timeout,&nSize);
+        nTotal += nSize;
+
     }
-    ret = http_buf.pos;
-    
+    if(ret == HTTP_CLIENT_EOS){
+        ret = 0;
+    }
+
+
 fail:    
     if(ret < 0){
-        av_log(NULL, AV_LOG_ERROR,  "[cseg_ivr_writer] HTTP POST failed:%s\n", err_buf);        
+        av_log(NULL, AV_LOG_ERROR,  "[cseg_ivr_writer] HTTP POST failed(%d)\n", ret);        
     }
-    if(headers != NULL){
-        curl_slist_free_all(headers);
+    
+    if(pHTTP){
+        HTTPClientCloseRequest(&pHTTP);
+        pHTTP = 0;
     }
-    curl_easy_cleanup(easyhandle);    
+  
     return ret;
 }
 
@@ -333,7 +337,7 @@ static int create_file(char * ivr_rest_uri,
     //char checksum_b64[32];
     //char checksum_b64_escape[128];
     char post_data_str[256];
-    char * http_response_json = av_mallocz(MAX_HTTP_RESULT_SIZE);
+    char * http_response_json = av_malloc(MAX_HTTP_RESULT_SIZE);
     cJSON * json_root = NULL;
     cJSON * json_name = NULL;
     cJSON * json_uri = NULL;    
@@ -347,6 +351,8 @@ static int create_file(char * ivr_rest_uri,
     if(file_uri_size){
         file_uri[0] = 0;
     }    
+    
+    memset(http_response_json, 0, MAX_HTTP_RESULT_SIZE);
     
     //prepare post_data
     //av_md5_sum(checksum, segment->buffer, segment->size);
@@ -364,7 +370,7 @@ static int create_file(char * ivr_rest_uri,
                     NULL, 
                     post_data_str, strlen(post_data_str), 
                     &status_code,
-                    http_response_json, MAX_HTTP_RESULT_SIZE);
+                    http_response_json, MAX_HTTP_RESULT_SIZE - 1);
     if(ret < 0){
         goto failed;       
     }
@@ -462,7 +468,7 @@ static int save_file(char * ivr_rest_uri,
                     NULL, 
                     post_data_str, strlen(post_data_str), 
                     &status_code,
-                    http_response_json, MAX_HTTP_RESULT_SIZE); 
+                    http_response_json, MAX_HTTP_RESULT_SIZE - 1); 
     if(ret < 0){
         return ret;
     }
@@ -497,7 +503,7 @@ static int save_file(char * ivr_rest_uri,
 static int ivr_init(CachedSegmentContext *cseg)
 {
     //init curl lib
-    curl_global_init(CURL_GLOBAL_ALL);    
+    //curl_global_init(CURL_GLOBAL_ALL);    
 
     
     return 0;
@@ -507,7 +513,7 @@ static int ivr_init(CachedSegmentContext *cseg)
 #define MAX_FILE_NAME 1024
 #define MAX_URI_LEN 1024
 
-#define FILE_CREATE_TIMEOUT 10000
+#define FILE_CREATE_TIMEOUT 10
 static int ivr_write_segment(CachedSegmentContext *cseg, CachedSegment *segment)
 {
     char ivr_rest_uri[MAX_URI_LEN] = "http";
@@ -530,7 +536,7 @@ static int ivr_write_segment(CachedSegmentContext *cseg, CachedSegment *segment)
 
     p = strchr(cseg->filename, ':');  
     if(p){
-        av_strlcat(ivr_rest_uri, p, MAX_URI_LEN);
+        strncat(ivr_rest_uri, p, MAX_URI_LEN);
     }else{
         ret = AVERROR(EINVAL);
         av_log(NULL, AV_LOG_ERROR,  "[cseg_ivr_writer] filename malformat\n");
@@ -575,7 +581,7 @@ fail:
 
 static void ivr_uninit(CachedSegmentContext *cseg)
 {
-    curl_global_cleanup();
+    //curl_global_cleanup();
 }
 
 
