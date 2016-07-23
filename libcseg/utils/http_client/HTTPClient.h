@@ -91,6 +91,8 @@ extern "C" {
     typedef void   E_HTTPDebug(const char *,const char*,UINT32,char *,...); // HTTPDebug hook function
 #endif
 
+#define H_MALLOC   malloc
+#define H_FREE     free
 
     ///////////////////////////////////////////////////////////////////////////////
     //

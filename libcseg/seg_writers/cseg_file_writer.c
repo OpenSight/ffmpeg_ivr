@@ -83,7 +83,7 @@ static int file_write_segment(CachedSegmentContext *cseg, CachedSegment *segment
     f = fopen(file_name, "wb");
     if(!f){
         perror("Open File failed");
-        return -1;
+        return AVERROR(errno);
     }
     
     len = 0;
@@ -94,13 +94,13 @@ static int file_write_segment(CachedSegmentContext *cseg, CachedSegment *segment
         if(cur_frag == NULL){
             fclose(f);
             fprintf(stderr, "segment is invalid");
-            return -1;
+            return AVERROR(EFAULT);
         }
         ret = fwrite(cur_frag->buffer, 1, to_write, f);
         if(ret != to_write){
             fclose(f);
             perror("fwrite error(%s)");
-            return -1;
+            return AVERROR(errno);
         }
         
         len += to_write;

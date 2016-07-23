@@ -50,6 +50,7 @@
 #include	<sys/ioctl.h>
 #include	<errno.h>
 #include	<stdarg.h>
+#include    <stdint.h>
 
 #define		SOCKET_ERROR			-1
 
@@ -58,8 +59,8 @@
 #define		HTTP_EWOULDBLOCK    (EWOULDBLOCK)
 
 // Generic types
-typedef unsigned long                UINT32;
-typedef long                         INT32; 
+typedef uint32_t                       UINT32;
+typedef int32_t                        INT32; 
 
 #endif	// #ifdef _HTTP_BUILD_WIN32
 

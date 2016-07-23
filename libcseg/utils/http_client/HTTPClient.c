@@ -95,7 +95,7 @@ HTTP_SESSION_HANDLE  HTTPClientOpenRequest (HTTP_CLIENT_SESSION_FLAGS Flags)
     // Attempt to allocate the buffer
     //printf("Session Ptr lives at %p.\n", (void*)&pHTTPSession);
 
-    pHTTPSession = (P_HTTP_SESSION)malloc(ALIGN(sizeof(HTTP_SESSION)));
+    pHTTPSession = (P_HTTP_SESSION)H_MALLOC(ALIGN(sizeof(HTTP_SESSION)));
     
     // Did we succeed?
     if(!pHTTPSession)
@@ -123,12 +123,12 @@ HTTP_SESSION_HANDLE  HTTPClientOpenRequest (HTTP_CLIENT_SESSION_FLAGS Flags)
         nAllocationSize = HTTP_CLIENT_MAX_SEND_RECV_HEADERS;
     }
     // Allocate the headers buffer
-    pHTTPSession->HttpHeaders.HeadersBuffer.pParam = (CHAR*)malloc(ALIGN(nAllocationSize));
+    pHTTPSession->HttpHeaders.HeadersBuffer.pParam = (CHAR*)H_MALLOC(ALIGN(nAllocationSize));
     // Check the returned pointer
     if(!pHTTPSession->HttpHeaders.HeadersBuffer.pParam)
     {
         // malloc() error, free the containing structure and exit.
-        free(pHTTPSession);
+        H_FREE(pHTTPSession);
         return 0;
         
     }
@@ -207,12 +207,12 @@ UINT32 HTTPClientCloseRequest (HTTP_SESSION_HANDLE *pSession)
     if(pHTTPSession->HttpHeaders.HeadersBuffer.pParam)
     {
         // Release the used memory
-        free(pHTTPSession->HttpHeaders.HeadersBuffer.pParam);
+        H_FREE(pHTTPSession->HttpHeaders.HeadersBuffer.pParam);
     }
     // Close any active socket connection
     HTTPIntrnConnectionClose(pHTTPSession);
     // free the session structure
-    free(pHTTPSession);
+    H_FREE(pHTTPSession);
     
     pHTTPSession = 0;   // NULL the pointer 
     *(pSession) = 0;
@@ -1423,7 +1423,7 @@ UINT32 HTTPIntrnResizeBuffer (P_HTTP_SESSION pHTTPSession,
     // Current buffer size is the sum of the incoming and outgoing headers strings lengths
     nCurrentBufferSize = pHTTPSession->HttpHeaders.HeadersOut.nLength + pHTTPSession->HttpHeaders.HeadersIn.nLength;
     // Allocate a new buffer with the requested buffer size
-    pPtr = (CHAR*)malloc(ALIGN(nNewBufferSize));
+    pPtr = (CHAR*)H_MALLOC(ALIGN(nNewBufferSize));
     if(!pPtr)
     {
         // malloc() error
@@ -1443,7 +1443,7 @@ UINT32 HTTPIntrnResizeBuffer (P_HTTP_SESSION pHTTPSession,
         memset(pPtr,0x00,nNewBufferSize);
     }
     
-    free(pHTTPSession->HttpHeaders.HeadersBuffer.pParam);
+    H_FREE(pHTTPSession->HttpHeaders.HeadersBuffer.pParam);
     
     pHTTPSession->HttpHeaders.HeadersBuffer.pParam = pPtr;
     pHTTPSession->HttpHeaders.HeadersBuffer.nLength = nNewBufferSize;

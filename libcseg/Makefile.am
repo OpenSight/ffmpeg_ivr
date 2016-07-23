@@ -30,8 +30,8 @@ libcseg_la_SOURCES =  config.h \
     utils/http_client/HTTPClientWrapper.h \
     utils/http_client/HTTPClientWrapper.c \
     seg_writers/cseg_dummy_writer.c \
-    seg_writers/cseg_file_writer.c 
-#    seg_writers/cseg_ivr_writer.c
+    seg_writers/cseg_file_writer.c  \
+    seg_writers/cseg_ivr_writer.c
 
 libcseg_la_LDFLAGS = -version-info 0:0:0 $(AM_LDFLAGS)   
                     
