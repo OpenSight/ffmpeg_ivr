@@ -235,7 +235,7 @@ extern "C" {
 
 
     // HTTP Type Definitions 
-    typedef UINT32          HTTP_SESSION_HANDLE;
+    typedef unsigned long          HTTP_SESSION_HANDLE;
     typedef UINT32          HTTP_CLIENT_SESSION_FLAGS;
 
 

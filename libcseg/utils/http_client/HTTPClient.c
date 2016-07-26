@@ -139,7 +139,7 @@ HTTP_SESSION_HANDLE  HTTPClientOpenRequest (HTTP_CLIENT_SESSION_FLAGS Flags)
     pHTTPSession->HttpHeaders.HeadersBuffer.nLength = nAllocationSize;
     
     // Set default values in the session structure
-    HTTPClientSetVerb((UINT32)pHTTPSession,(HTTP_VERB)HTTP_CLIENT_DEFAULT_VERB);    // Default HTTP verb
+    HTTPClientSetVerb((HTTP_SESSION_HANDLE)pHTTPSession,(HTTP_VERB)HTTP_CLIENT_DEFAULT_VERB);    // Default HTTP verb
     pHTTPSession->HttpUrl.nPort             = HTTP_CLIENT_DEFAULT_PORT;             // Default TCP port
     pHTTPSession->HttpConnection.HttpSocket = HTTP_INVALID_SOCKET;                       // Invalidate the socket
     // Set the outgoing headers pointers
@@ -3556,7 +3556,7 @@ UINT32 HTTPIntrnSessionReset (P_HTTP_SESSION pHTTPSession, BOOL EntireSession)
         memset(pHTTPSession->HttpHeaders.HeadersBuffer.pParam ,0x00,nAllocationSize);
         
         // Set default values in the session structure
-        HTTPClientSetVerb((UINT32)pHTTPSession,(HTTP_VERB)HTTP_CLIENT_DEFAULT_VERB);    // Default HTTP verb
+        HTTPClientSetVerb((HTTP_SESSION_HANDLE)pHTTPSession,(HTTP_VERB)HTTP_CLIENT_DEFAULT_VERB);    // Default HTTP verb
         pHTTPSession->HttpUrl.nPort             = HTTP_CLIENT_DEFAULT_PORT;             // Default TCP port
         // Set the outgoing headers pointers
         memset(&pHTTPSession->HttpHeaders.HeadersIn,0,sizeof(HTTP_PARAM));
