@@ -101,7 +101,7 @@ static int http_post(char * http_uri,
                      char * post_data, int post_len,
                      int32_t retries,
                      int * status_code,
-                     char * result_buf, int max_buf_size)
+                     char * result_buf, int *buf_size)
 {
     CURL * easyhandle = NULL;
     int ret = 0;
@@ -111,7 +111,7 @@ static int http_post(char * http_uri,
     HttpBuf http_buf;
     char err_buf[CURL_ERROR_SIZE] = "unknown";
     CURLcode curl_res = CURLE_OK;
-    
+
     
     if(retries <= 0){
         retries =  HTTP_DEFAULT_RETRY_NUM;       
@@ -163,9 +163,9 @@ static int http_post(char * http_uri,
                 break;                
             }
         } 
-        if(result_buf != NULL && max_buf_size != 0){
+        if(result_buf != NULL && buf_size != NULL && (*buf_size) != 0){
             http_buf.buf = result_buf;
-            http_buf.buf_size = max_buf_size;
+            http_buf.buf_size = (*buf_size);
             http_buf.pos = 0;
             
             if(curl_easy_setopt(easyhandle, CURLOPT_WRITEFUNCTION, http_write_callback)){
@@ -209,6 +209,9 @@ static int http_post(char * http_uri,
         if(status_code){
             *status_code = status;
         }
+        if(buf_size != NULL){
+            (*buf_size) = http_buf.pos;
+        }
 
         break;   // successful, then exit the loop
     }//while(retries-- > 0){
@@ -221,6 +224,7 @@ fail:
     }
     if(headers != NULL){
         curl_slist_free_all(headers);
+        headers = NULL;
     }
     if(easyhandle != NULL){
         curl_easy_cleanup(easyhandle);   
@@ -391,6 +395,7 @@ static int create_file(char * ivr_rest_uri,
     cJSON * json_info = NULL;        
     int ret;
     int status_code = 200;
+    int response_size = MAX_HTTP_RESULT_SIZE - 1;
     
     if(filename_size){
         filename[0] = 0;
@@ -416,8 +421,8 @@ static int create_file(char * ivr_rest_uri,
                     post_data_str, strlen(post_data_str), 
                     HTTP_DEFAULT_RETRY_NUM,
                     &status_code,
-                    http_response_json, MAX_HTTP_RESULT_SIZE);
-    if(ret < 0){
+                    http_response_json, &response_size);
+    if(ret){
         goto failed;       
     }
 
@@ -474,7 +479,7 @@ static int upload_file(CachedSegment *segment,
                    segment->buffer, segment->size, 
                    HTTP_DEFAULT_RETRY_NUM,
                    &status_code);
-    if(ret < 0){
+    if(ret){
         return ret;
     }
     
@@ -500,7 +505,8 @@ static int save_file(char * ivr_rest_uri,
     int ret = 0;
     char * http_response_json = av_mallocz(MAX_HTTP_RESULT_SIZE);
     cJSON * json_root = NULL;
-    cJSON * json_info = NULL;     
+    cJSON * json_info = NULL; 
+    int response_size = MAX_HTTP_RESULT_SIZE - 1;    
     
     //prepare post_data
     if(success){
@@ -525,8 +531,8 @@ static int save_file(char * ivr_rest_uri,
                     post_data_str, strlen(post_data_str), 
                     HTTP_DEFAULT_RETRY_NUM,
                     &status_code,
-                    http_response_json, MAX_HTTP_RESULT_SIZE); 
-    if(ret < 0){
+                    http_response_json, &response_size); 
+    if(ret){
         return ret;
     }
 
