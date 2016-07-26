@@ -85,7 +85,7 @@ static int http_post(char * http_uri,
                      char * post_data, int post_len,
                      int32_t  retries,
                      int * status_code,
-                     char * result_buf, int max_buf_size)
+                     char * result_buf, int *buf_size)
 {
     int ret = 0;
     HTTP_CLIENT             HTTPClient;
@@ -163,44 +163,50 @@ static int http_post(char * http_uri,
 
         // Get the data until we get an error or end of stream code
         // printf("Each dot represents %d bytes:\n",HTTP_BUFFER_SIZE );
-        nTotal = 0;
-        ret = HTTP_CLIENT_SUCCESS;
-        while(nTotal < HTTPClient.TotalResponseBodyLength)
-        {
-            if(nTotal >= max_buf_size){
-                ret = HTTP_CLIENT_ERROR_NO_MEMORY;
-                break;
+        if(result_buf != NULL && buf_size != NULL && (*buf_size) != 0){
+            nTotal = 0;
+            ret = HTTP_CLIENT_SUCCESS;
+            while(nTotal < HTTPClient.TotalResponseBodyLength)
+            {
+                if(nTotal >= (*buf_size)){
+                    ret = HTTP_CLIENT_ERROR_NO_MEMORY;
+                    break;
+                }
+                    
+                // Set the size of our buffer
+                nSize = (*buf_size) - nTotal;   
+
+                // Get the data
+                ret = HTTPClientReadData(pHTTP,result_buf+nTotal,nSize,io_timeout,&nSize);
+                nTotal += nSize;
+                if(ret == HTTP_CLIENT_EOS){
+                    ret = HTTP_CLIENT_SUCCESS;
+                    break;  // receive complete,
+                }else if(ret != HTTP_CLIENT_SUCCESS){
+                    break;  //error break;
+                }
+
             }
+            
+            if(ret == HTTP_CLIENT_SUCCESS){
+                (*buf_size) = nTotal;
+            }else{      
+                if(http_need_retry(ret)){
+                    //cleanup the current HTTP client session hanle
+                    HTTPClientCloseRequest(&pHTTP);
+                    pHTTP = 0;
+                    continue;
+                }else{
+                    break;
+                }            
+            }//if(ret != HTTP_CLIENT_SUCCESS){
                 
-            // Set the size of our buffer
-            nSize = max_buf_size - nTotal;   
-
-            // Get the data
-            ret = HTTPClientReadData(pHTTP,result_buf+nTotal,nSize,io_timeout,&nSize);
-            if(ret == HTTP_CLIENT_EOS){
-                ret = HTTP_CLIENT_SUCCESS;
-                break;  // receive complete,
-            }else if(ret != HTTP_CLIENT_SUCCESS){
-                break;  //error break;
-            }
-            nTotal += nSize;
-
-        }
-        
-        if(ret != HTTP_CLIENT_SUCCESS){        
-            if(http_need_retry(ret)){
-                //cleanup the current HTTP client session hanle
-                HTTPClientCloseRequest(&pHTTP);
-                pHTTP = 0;
-                continue;
-            }else{
-                break;
-            }            
-        }//if(ret != HTTP_CLIENT_SUCCESS){
-        
+        }//if(result_buf != NULL && buf_size != NULL && (*buf_size) != 0){
         
         break; //success, go through
+        
     }//while(retries-- > 0){
+        
 fail:    
     
     if(pHTTP){
@@ -374,6 +380,7 @@ static int create_file(char * ivr_rest_uri,
     cJSON * json_info = NULL;        
     int ret;
     int status_code = 200;
+    int response_size = MAX_HTTP_RESULT_SIZE - 1;
     
     if(filename_size){
         filename[0] = 0;
@@ -401,7 +408,7 @@ static int create_file(char * ivr_rest_uri,
                     post_data_str, strlen(post_data_str), 
                     HTTP_DEFAULT_RETRY_NUM, 
                     &status_code,
-                    http_response_json, MAX_HTTP_RESULT_SIZE - 1);
+                    http_response_json, &response_size);
     if(ret < 0){
         goto failed;       
     }
@@ -486,7 +493,8 @@ static int save_file(char * ivr_rest_uri,
     int ret = 0;
     char * http_response_json = av_malloc(MAX_HTTP_RESULT_SIZE);
     cJSON * json_root = NULL;
-    cJSON * json_info = NULL;     
+    cJSON * json_info = NULL;   
+    int response_size = MAX_HTTP_RESULT_SIZE - 1;
     
     memset(http_response_json, 0, MAX_HTTP_RESULT_SIZE);
     
@@ -512,7 +520,7 @@ static int save_file(char * ivr_rest_uri,
                     post_data_str, strlen(post_data_str), 
                     HTTP_DEFAULT_RETRY_NUM, 
                     &status_code,
-                    http_response_json, MAX_HTTP_RESULT_SIZE - 1); 
+                    http_response_json, &response_size); 
     if(ret < 0){
         return ret;
     }
