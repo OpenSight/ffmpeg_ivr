@@ -39,6 +39,7 @@
 
 #define MIN(a,b) ((a) > (b) ? (b) : (a))
 
+#define HTTP_DEFAULT_RETRY_NUM    2
 
 static int http_status_to_av_code(int status_code)
 {
@@ -98,6 +99,7 @@ static int http_post(char * http_uri,
                      int32_t io_timeout,  //in milli-seconds 
                      char * post_content_type, 
                      char * post_data, int post_len,
+                     int32_t retries,
                      int * status_code,
                      char * result_buf, int max_buf_size)
 {
@@ -108,90 +110,110 @@ static int http_post(char * http_uri,
     long status;
     HttpBuf http_buf;
     char err_buf[CURL_ERROR_SIZE] = "unknown";
-    
-    memset(&http_buf, 0, sizeof(HttpBuf));
-
+    CURLcode curl_res = CURLE_OK;
     
     
-    easyhandle = curl_easy_init();
-    if(easyhandle == NULL){
-        return AVERROR(ENOMEM);
+    if(retries <= 0){
+        retries =  HTTP_DEFAULT_RETRY_NUM;       
     }
 
-    if(curl_easy_setopt(easyhandle, CURLOPT_URL, http_uri)){
-        ret = AVERROR_EXTERNAL;
-        goto fail;                
-    }   
+
     if(post_content_type != NULL){
         memset(content_type_header, 0, 128);
         snprintf(content_type_header, 127, 
                  "Content-Type: %s", post_content_type);
         headers = curl_slist_append(headers, content_type_header);
-        if(curl_easy_setopt(easyhandle, CURLOPT_HTTPHEADER, headers)){
-            ret = AVERROR_EXTERNAL;
-            goto fail;                
-        }
+
     }   
-    
-    if(curl_easy_setopt(easyhandle, CURLOPT_POSTFIELDS, post_data)){
-        ret = AVERROR_EXTERNAL;
-        goto fail;                
-    }  
-    if(curl_easy_setopt(easyhandle, CURLOPT_POSTFIELDSIZE, post_len)){
-        ret = AVERROR_EXTERNAL;
-        goto fail;                
-    }    
-    if(io_timeout > 0){
-        if(curl_easy_setopt(easyhandle, CURLOPT_TIMEOUT_MS , io_timeout)){
-            ret = AVERROR_EXTERNAL;
-            goto fail;                
-        }
-    }   
-    
-    if(result_buf != NULL && max_buf_size != 0){
-        http_buf.buf = result_buf;
-        http_buf.buf_size = max_buf_size;
-        http_buf.pos = 0;
         
-        if(curl_easy_setopt(easyhandle, CURLOPT_WRITEFUNCTION, http_write_callback)){
-            ret = AVERROR_EXTERNAL;
-            goto fail;                
+    while(retries-- > 0){
+        memset(&http_buf, 0, sizeof(HttpBuf));   
+        ret = 0;
+        strcpy(err_buf, "unknown");
+        
+        easyhandle = curl_easy_init();
+        if(easyhandle == NULL){
+            ret = AVERROR(ENOMEM);
+            break;
         }
-        if(curl_easy_setopt(easyhandle, CURLOPT_WRITEDATA, &http_buf)){
+
+        if(curl_easy_setopt(easyhandle, CURLOPT_URL, http_uri)){
             ret = AVERROR_EXTERNAL;
-            goto fail;                
+            break;                
+        }   
+        
+        if(headers != NULL){
+            if(curl_easy_setopt(easyhandle, CURLOPT_HTTPHEADER, headers)){
+                ret = AVERROR_EXTERNAL;
+                break;                
+            }            
         }
-    }
-    
+        if(curl_easy_setopt(easyhandle, CURLOPT_POSTFIELDS, post_data)){
+            ret = AVERROR_EXTERNAL;
+            break;            
+        }  
+        if(curl_easy_setopt(easyhandle, CURLOPT_POSTFIELDSIZE, post_len)){
+            ret = AVERROR_EXTERNAL;
+            break;              
+        }  
 
-    if(curl_easy_setopt(easyhandle, CURLOPT_ERRORBUFFER, err_buf)){
-        ret = AVERROR_EXTERNAL;
-        goto fail;                
-    }
+        if(io_timeout > 0){
+            if(curl_easy_setopt(easyhandle, CURLOPT_TIMEOUT_MS , io_timeout)){
+                ret = AVERROR_EXTERNAL;
+                break;                
+            }
+        } 
+        if(result_buf != NULL && max_buf_size != 0){
+            http_buf.buf = result_buf;
+            http_buf.buf_size = max_buf_size;
+            http_buf.pos = 0;
+            
+            if(curl_easy_setopt(easyhandle, CURLOPT_WRITEFUNCTION, http_write_callback)){
+                ret = AVERROR_EXTERNAL;
+                break;                
+            }
+            if(curl_easy_setopt(easyhandle, CURLOPT_WRITEDATA, &http_buf)){
+                ret = AVERROR_EXTERNAL;
+                break;                
+            }
+        }  
 
-    
+        if(curl_easy_setopt(easyhandle, CURLOPT_ERRORBUFFER, err_buf)){
+            ret = AVERROR_EXTERNAL;
+            break;                
+        }
  #ifdef ENABLE_CURLOPT_VERBOSE   
-    if(curl_easy_setopt(easyhandle, CURLOPT_VERBOSE, 1)){
-        ret = AVERROR_EXTERNAL;
-        goto fail;                
-    }    
+        if(curl_easy_setopt(easyhandle, CURLOPT_VERBOSE, 1)){
+            ret = AVERROR_EXTERNAL;
+            break;                
+        }    
  #endif
         
-    if(curl_easy_perform(easyhandle)){
+        if((curl_res = curl_easy_perform(easyhandle)) != CURLE_OK){
+            ret = AVERROR_EXTERNAL;            
+            if(curl_res == CURLE_OPERATION_TIMEDOUT ){
+                break;
+            }else{
+                //retry
+                curl_easy_cleanup(easyhandle);  
+                easyhandle = NULL;
+                continue;
+            }
+        }
+    
+        if(curl_easy_getinfo(easyhandle, CURLINFO_RESPONSE_CODE, &status)){
+            ret = AVERROR_EXTERNAL;
+            break;
+        }    
         
-        ret = AVERROR_EXTERNAL;
-        goto fail;
-    }
+        if(status_code){
+            *status_code = status;
+        }
+
+        break;   // successful, then exit the loop
+    }//while(retries-- > 0){
     
-    if(curl_easy_getinfo(easyhandle, CURLINFO_RESPONSE_CODE, &status)){
-        ret = AVERROR_EXTERNAL;
-        goto fail;
-    }    
-    
-    if(status_code){
-        *status_code = status;
-    }
-    ret = http_buf.pos;
+
     
 fail:    
     if(ret < 0){
@@ -200,7 +222,10 @@ fail:
     if(headers != NULL){
         curl_slist_free_all(headers);
     }
-    curl_easy_cleanup(easyhandle);    
+    if(easyhandle != NULL){
+        curl_easy_cleanup(easyhandle);   
+        easyhandle = NULL;
+    }
     return ret;
 }
 
@@ -208,6 +233,7 @@ static int http_put(char * http_uri,
                     int32_t io_timeout,  //in milli-seconds 
                     char * content_type, 
                     char * buf, int buf_size,
+                    int32_t retries,
                     int * status_code)
 {
     CURL * easyhandle = NULL;
@@ -217,26 +243,14 @@ static int http_put(char * http_uri,
     char expect_header[128];
     long status;
     HttpBuf http_buf;
-    char err_buf[CURL_ERROR_SIZE] = "unknown";    
+    char err_buf[CURL_ERROR_SIZE] = "unknown";   
+    CURLcode curl_res = CURLE_OK; 
     
-    memset(&http_buf, 0, sizeof(HttpBuf));
-    
-    
-    easyhandle = curl_easy_init();
-    if(easyhandle == NULL){
-        return AVERROR(ENOMEM);
-    }
+    if(retries <= 0){
+        retries =  HTTP_DEFAULT_RETRY_NUM;       
+    }    
 
-    if(curl_easy_setopt(easyhandle, CURLOPT_URL, http_uri)){
-        ret = AVERROR_EXTERNAL;
-        goto fail;                
-    }   
-    
-    if(curl_easy_setopt(easyhandle, CURLOPT_UPLOAD, 1L)){
-        ret = AVERROR_EXTERNAL;
-        goto fail;                
-    }   
-    
+
     if(content_type != NULL){
         memset(content_type_header, 0, 128);
         snprintf(content_type_header, 127, 
@@ -246,68 +260,101 @@ static int http_put(char * http_uri,
     //disable "Expect: 100-continue"  header
     memset(expect_header, 0, 128);
     strcpy(expect_header, "Expect:");
-    headers = curl_slist_append(headers, expect_header);     
+    headers = curl_slist_append(headers, expect_header);   
 
-    if(curl_easy_setopt(easyhandle, CURLOPT_HTTPHEADER, headers)){
-        ret = AVERROR_EXTERNAL;
-        goto fail;                
-    }
-   
-    if(curl_easy_setopt(easyhandle, CURLOPT_INFILESIZE, buf_size)){
-        ret = AVERROR_EXTERNAL;
-        goto fail;                
-    }    
-
-    if(io_timeout > 0){
-        if(curl_easy_setopt(easyhandle, CURLOPT_TIMEOUT_MS , io_timeout)){
-            ret = AVERROR_EXTERNAL;
-            goto fail;                
-        }
-    }   
+    while(retries-- > 0){
+        memset(&http_buf, 0, sizeof(HttpBuf));
+        ret = 0;
+        strcpy(err_buf, "unknown");
     
-    if(buf != NULL && buf_size != 0){
-        http_buf.buf = buf;
-        http_buf.buf_size = buf_size;
-        http_buf.pos = 0;
+    
+        easyhandle = curl_easy_init();
+        if(easyhandle == NULL){
+            ret = AVERROR(ENOMEM);
+            break;
+        }
+
+        if(curl_easy_setopt(easyhandle, CURLOPT_URL, http_uri)){
+            ret = AVERROR_EXTERNAL;
+            break;             
+        }   
         
-        if(curl_easy_setopt(easyhandle, CURLOPT_READFUNCTION, http_read_callback)){
+        if(curl_easy_setopt(easyhandle, CURLOPT_UPLOAD, 1L)){
             ret = AVERROR_EXTERNAL;
-            goto fail;                
-        }
-        if(curl_easy_setopt(easyhandle, CURLOPT_READDATA, &http_buf)){
+            break;              
+        }   
+    
+  
+
+       if(curl_easy_setopt(easyhandle, CURLOPT_HTTPHEADER, headers)){
             ret = AVERROR_EXTERNAL;
-            goto fail;                
+            break;               
         }
-    }
+       
+        if(curl_easy_setopt(easyhandle, CURLOPT_INFILESIZE, buf_size)){
+            ret = AVERROR_EXTERNAL;
+            break;              
+        }    
+
+        if(io_timeout > 0){
+            if(curl_easy_setopt(easyhandle, CURLOPT_TIMEOUT_MS , io_timeout)){
+                ret = AVERROR_EXTERNAL;
+                break;               
+            }
+        }   
+    
+        if(buf != NULL && buf_size != 0){
+            http_buf.buf = buf;
+            http_buf.buf_size = buf_size;
+            http_buf.pos = 0;
+            
+            if(curl_easy_setopt(easyhandle, CURLOPT_READFUNCTION, http_read_callback)){
+                ret = AVERROR_EXTERNAL;
+                break;                
+            }
+            if(curl_easy_setopt(easyhandle, CURLOPT_READDATA, &http_buf)){
+                ret = AVERROR_EXTERNAL;
+                break;               
+            }
+        }
     
 
-    if(curl_easy_setopt(easyhandle, CURLOPT_ERRORBUFFER, err_buf)){
-        ret = AVERROR_EXTERNAL;
-        goto fail;                
-    }
+        if(curl_easy_setopt(easyhandle, CURLOPT_ERRORBUFFER, err_buf)){
+            ret = AVERROR_EXTERNAL;
+            break;               
+        }
 
-    
- #ifdef ENABLE_CURLOPT_VERBOSE   
-    if(curl_easy_setopt(easyhandle, CURLOPT_VERBOSE, 1)){
-        ret = AVERROR_EXTERNAL;
-        goto fail;                
-    }    
- #endif
         
-    if(curl_easy_perform(easyhandle)){
-        ret = AVERROR_EXTERNAL;
-        goto fail;
-    }
+#ifdef ENABLE_CURLOPT_VERBOSE   
+        if(curl_easy_setopt(easyhandle, CURLOPT_VERBOSE, 1)){
+            ret = AVERROR_EXTERNAL;
+            break;                
+        }    
+#endif
+        
+        if((curl_res = curl_easy_perform(easyhandle)) != CURLE_OK){
+            ret = AVERROR_EXTERNAL;            
+            if(curl_res == CURLE_OPERATION_TIMEDOUT ){
+                break;
+            }else{
+                //retry
+                curl_easy_cleanup(easyhandle);  
+                easyhandle = NULL;
+                continue;
+            }
+        }
     
-    if(curl_easy_getinfo(easyhandle, CURLINFO_RESPONSE_CODE, &status)){
-        ret = AVERROR_EXTERNAL;
-        goto fail;
-    }    
-    
-    if(status_code){
-        *status_code = status;
-    }
-    
+        if(curl_easy_getinfo(easyhandle, CURLINFO_RESPONSE_CODE, &status)){
+            ret = AVERROR_EXTERNAL;
+            break;
+        }    
+        
+        if(status_code){
+            *status_code = status;
+        }
+        
+        break;   // successful, then exit the loop
+    }//while(retries-- > 0){    
 fail:    
 
     if(ret < 0){
@@ -317,7 +364,11 @@ fail:
     if(headers != NULL){
         curl_slist_free_all(headers);
     }
-    curl_easy_cleanup(easyhandle);    
+    
+    if(easyhandle != NULL){
+        curl_easy_cleanup(easyhandle);   
+        easyhandle = NULL;
+    }  
     
     return ret;
 }
@@ -363,12 +414,12 @@ static int create_file(char * ivr_rest_uri,
                     io_timeout,
                     NULL, 
                     post_data_str, strlen(post_data_str), 
+                    HTTP_DEFAULT_RETRY_NUM,
                     &status_code,
                     http_response_json, MAX_HTTP_RESULT_SIZE);
     if(ret < 0){
         goto failed;       
     }
-    ret = 0;
 
     //parse the result
     if(status_code >= 200 && status_code < 300){
@@ -421,6 +472,7 @@ static int upload_file(CachedSegment *segment,
     int ret = 0;  
     ret = http_put(file_uri, io_timeout, "video/mp2t",
                    segment->buffer, segment->size, 
+                   HTTP_DEFAULT_RETRY_NUM,
                    &status_code);
     if(ret < 0){
         return ret;
@@ -471,12 +523,13 @@ static int save_file(char * ivr_rest_uri,
                     io_timeout,
                     NULL, 
                     post_data_str, strlen(post_data_str), 
+                    HTTP_DEFAULT_RETRY_NUM,
                     &status_code,
                     http_response_json, MAX_HTTP_RESULT_SIZE); 
     if(ret < 0){
         return ret;
     }
-    ret = 0;
+
 
 
     if(status_code < 200 || status_code >= 300){
