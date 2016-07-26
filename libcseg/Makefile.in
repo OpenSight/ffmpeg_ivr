@@ -74,8 +74,8 @@ am__installdirs = "$(DESTDIR)$(libdir)" "$(DESTDIR)$(pkgconfigdir)"
 LTLIBRARIES = $(lib_LTLIBRARIES)
 libcseg_la_LIBADD =
 am__dirstamp = $(am__leading_dot)dirstamp
-am_libcseg_la_OBJECTS = min_cached_segment.lo utils/cJSON.lo \
-	utils/http_client/HTTPClient.lo \
+am_libcseg_la_OBJECTS = min_cached_segment.lo register.lo \
+	utils/cJSON.lo utils/http_client/HTTPClient.lo \
 	utils/http_client/HTTPClientAuth.lo \
 	utils/http_client/HTTPClientString.lo \
 	utils/http_client/HTTPClientWrapper.lo \
@@ -309,6 +309,8 @@ lib_LTLIBRARIES = libcseg.la
 libcseg_la_SOURCES = config.h \
     min_cached_segment.c \
     min_cached_segment.h \
+    libcseg.h \
+    register.c \
     utils/cJSON.c \
     utils/cJSON.h \
     utils/http_client/HTTPClient.c \
@@ -454,6 +456,7 @@ distclean-compile:
 	-rm -f *.tab.c
 
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/min_cached_segment.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/register.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@seg_writers/$(DEPDIR)/cseg_dummy_writer.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@seg_writers/$(DEPDIR)/cseg_file_writer.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@seg_writers/$(DEPDIR)/cseg_ivr_writer.Plo@am__quote@

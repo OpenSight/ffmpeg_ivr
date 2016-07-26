@@ -18,6 +18,8 @@ lib_LTLIBRARIES=libcseg.la
 libcseg_la_SOURCES =  config.h \
     min_cached_segment.c \
     min_cached_segment.h \
+    libcseg.h \
+    register.c \
     utils/cJSON.c \
     utils/cJSON.h \
     utils/http_client/HTTPClient.c \
