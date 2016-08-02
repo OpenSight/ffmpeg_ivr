@@ -30,9 +30,11 @@ typedef struct {
     av_stream_t** streams;
 }av_context_t;
 
+#define AV_PACKET_FLAGS_IS_IDR  0x01
+
 typedef struct {
     int stream_index;
-    uint8_t   flag;  // flag: bit8 for is_sync
+    uint8_t   flags;  // flag: bit8 for is_sync
     int64_t  pts;   // in 90khz
     int64_t  dts;   // -1 if not present
     uint8_t* data;  // for h264, NALU starts with 0x00000001
@@ -48,7 +50,7 @@ ts_muxer_t* new_ts_muxer(av_context_t*);
 void free_ts_muxer(ts_muxer_t*);
 
 // to unset give NULL
-int ts_muxer_set_avio_context(void*, avio_write_func);
+int ts_muxer_set_avio_context(ts_muxer_t* ts_muxer, void*, avio_write_func);
 
 // ask to write PAT PMT
 int ts_muxer_write_header(ts_muxer_t*);
