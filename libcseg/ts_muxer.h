@@ -5,6 +5,7 @@
 #ifndef FFMPEG_IVR_TS_MUXER_H_H
 #define FFMPEG_IVR_TS_MUXER_H_H
 
+#include "stddef.h"
 #include "stdint.h"
 
 typedef enum {
@@ -14,7 +15,8 @@ typedef enum {
 
 typedef enum {
     AV_STREAM_CODEC_H264,
-    AV_STREAM_CODEC_AAC
+    AV_STREAM_CODEC_AAC,
+    AV_STREAM_CODEC_AAC_WITH_ADTS
 }av_stream_codec_t;
 
 typedef struct {
@@ -25,15 +27,10 @@ typedef struct {
 }av_stream_t;
 
 
-typedef struct {
-    uint8_t stream_count;
-    av_stream_t** streams;
-}av_context_t;
-
 #define AV_PACKET_FLAGS_IS_IDR  0x01
 
 typedef struct {
-    int stream_index;
+    int av_stream_index;
     uint8_t   flags;  // flag: bit8 for is_sync
     int64_t  pts;   // in 90khz
     int64_t  dts;   // -1 if not present
@@ -46,16 +43,15 @@ typedef struct _ts_muxer ts_muxer_t;
 
 typedef int (*avio_write_func)(void* avio_context, const uint8_t* buf, size_t size);
 
-ts_muxer_t* new_ts_muxer(av_context_t*);
-void free_ts_muxer(ts_muxer_t*);
+ts_muxer_t* new_ts_muxer(av_stream_t* av_streams, int av_stream_count);
+void free_ts_muxer(ts_muxer_t* ts_muxer);
 
 // to unset give NULL
-int ts_muxer_set_avio_context(ts_muxer_t* ts_muxer, void*, avio_write_func);
+int ts_muxer_set_avio_context(ts_muxer_t* ts_muxer, void* avio_context, avio_write_func write);
 
 // ask to write PAT PMT
-int ts_muxer_write_header(ts_muxer_t*);
-int ts_muxer_write_packet(ts_muxer_t*, av_packet_t*);
-int ts_muxer_write_trailer(ts_muxer_t*);
+int ts_muxer_write_header(ts_muxer_t* ts_muxer);
+int ts_muxer_write_packet(ts_muxer_t* ts_muxer, av_packet_t* av_packet);
 
 
 #endif //FFMPEG_IVR_TS_MUXER_H_H
