@@ -319,8 +319,7 @@ int ts_muxer_prepare_ts_packet_info(ts_muxer_ts_packet_t *packet, uint8_t payloa
 /* TS packet IEC 13818-1:2000 2.4.3
  *
  */
-static uint8_t*
-ts_muxer_enc_packet_header(ts_muxer_ts_packet_t *packet, uint8_t *buf)
+uint8_t* ts_muxer_enc_packet_header(ts_muxer_ts_packet_t *packet, uint8_t *buf)
 {
     uint32_t    len, stuff_len;
 
@@ -365,8 +364,7 @@ ts_muxer_enc_packet_header(ts_muxer_ts_packet_t *packet, uint8_t *buf)
 /* TS packet IEC 13818-1:2000 2.4.4.3
  *
  */
-static int
-ts_muxer_enc_psi(struct _ts_muxer *ts)
+int ts_muxer_enc_psi(struct _ts_muxer *ts)
 {
     ts_muxer_ts_packet_t   *packet;
     uint8_t                *buf;
@@ -496,10 +494,83 @@ ts_muxer_enc_psi(struct _ts_muxer *ts)
     return 0;
 }
 
-int ts_muxer_enc_av_packet(ts_muxer_t* ts_muxer, av_packet_t* av_packet) {
 
+/* PES IEC 13818-1 2.4.3.7
+ *
+ */
+int ts_muxer_prepare_h264_pes(ts_muxer_h264_stream_t *stream, ts_muxer_h264_pes_t *pes, av_packet_t *av_packet)
+{
+    uint8_t    *buf;
 
+    if (NULL == pes || NULL == stream || NULL == av_packet) {
+        return -1;
+    }
+
+    memset(pes, 0, sizeof(ts_muxer_h264_pes_t));
+    pes->start = 1;
+    pes->is_IDR = av_packet->flags & AV_PACKET_FLAGS_IS_IDR;
+    pes->pid = stream->pid;
+    pes->dts = av_packet->dts;
+    pes->pts = av_packet->pts;
+    pes->payload = av_packet->data;
+    pes->payload_len = av_packet->size;
+    pes->filled = 0;
+
+    // PES header
+    buf = pes->header_data;
+    // 3 bytes packet_start_code_prefix
+    *buf++ = 0x00;
+    *buf++ = 0x00;
+    *buf++ = 0x01;
+    *buf++ = 0xE0; // 1 byte stream_id
+    // 2 byte PES length, let's make it 0 for simplicity
+    *buf++ = 0x00;
+    *buf++ = 0x00;
+    *buf++ = 0x80;
+    if (pes->dts < 0) {
+        // no DTS
+        *buf++ = 0x80;
+        *buf++ = 0x05;  // 1 byte PES_header_data_length
+    } else {
+        // PTS and DTS
+        *buf++ = 0xC0;
+        *buf++ = 0x0A;  // 1 byte PES_header_data_length
+    }
+    // 5 bytes PTS
+    *buf++ = 0x31 | ((pes->pts >> 29) & 0x0E);
+    *buf++ = pes->pts >> 22;
+    *buf++ = (pes->pts >> 14) | 0x01;
+    *buf++ = pes->pts >> 7;
+    *buf++ = (pes->pts << 1) | 0x01;
+    if (pes->dts >= 0) {
+        *buf++ = 0x11 | ((pes->dts >> 29) & 0x0E);
+        *buf++ = pes->dts >> 22;
+        *buf++ = (pes->dts >> 14) | 0x01;
+        *buf++ = pes->dts >> 7;
+        *buf++ = (pes->dts << 1) | 0x01;
+    }
+    // PES body
+    // AU delimiter
+    /*
+    ts_muxer_set_32value(buf, 1);
+    buf += 4;
+    *buf++ = 0x09;
+    if (pes->is_IDR) {
+        *buf++ = 0x10;
+    } else {
+        *buf++ = 0x30;
+    }
+     */
+
+    // let's add synchronization byte sequence before VCL NALU
+    //ts_muxer_set_32value(buf, 1);
+    //buf += 4;
+
+    pes->header_len = buf - pes->header_data;
+
+    return 0;
 }
+
 
 int ts_muxer_enc_h264_packet(ts_muxer_t* ts, ts_muxer_h264_stream_t* h264_stream, av_packet_t* av_packet) {
 
@@ -569,158 +640,13 @@ int ts_muxer_enc_h264_packet(ts_muxer_t* ts, ts_muxer_h264_stream_t* h264_stream
 }
 
 
-int ts_muxer_enc_aac_packet(ts_muxer_t* ts, ts_muxer_aac_stream_t* aac_stream, av_packet_t* av_packet) {
-
-    ts_muxer_aac_pes_t* pes;
-    ts_muxer_ts_packet_t* ts_packet;
-    uint8_t* pos;
-    size_t len;
-
-    if (NULL == ts || NULL == aac_stream || NULL == av_packet) {
-        return -1;
-    }
-
-    pes = &aac_stream->pes;
-    ts_packet = &ts->ts_packet;
-
-    if (0 != ts_muxer_prepare_aac_pes(aac_stream, pes, av_packet)) {
-        return -1;
-    }
-
-    while (pes->header_len + pes->payload_len > pes->filled && pes->header_len != 0) {
-
-        // prepare packet
-        if (0 != ts_muxer_prepare_ts_packet_info(ts_packet, TS_MUXER_PAYLOAD_AAC_PES, pes, aac_stream->continuity_count)) {
-            av_log(NULL, AV_LOG_ERROR, "Failed to prepare TS packet for AAC frame");
-            return -1;
-        }
-
-        // encode TS packet
-        pos = ts_muxer_enc_packet_header(ts_packet, ts_packet->buf);
-        if (NULL == pos) {
-            av_log(NULL, AV_LOG_ERROR, "Failed to encode TS packet for AAC PES");
-            return -1;
-        }
-
-        // fill PES into TS packet
-        pes->start = 0;
-        if (pes->filled < pes->header_len) {
-            // fill PES header part
-            len = MIN(pes->header_len - pes->filled, TS_MUXER_TX_PACKET_SIZE+ts_packet->buf-pos);
-            memcpy(pos, pes->header_data+pes->filled, len);
-            pos += len;
-            pes->filled += len;
-        }
-
-        if (pes->filled >= pes->header_len) {
-            len = MIN(pes->payload_len+pes->header_len-pes->filled, TS_MUXER_TX_PACKET_SIZE+ts_packet->buf-pos);
-            if (len) {
-                memcpy(pos, pes->payload+(pes->filled-pes->header_len), len);
-                pos += len;
-                pes->filled += len;
-            }
-        }
-
-        // there should not be end stuffing for PES TS packet
-        aac_stream->continuity_count++;
-        if (aac_stream->continuity_count > 0x0F) {
-            aac_stream->continuity_count = 0;
-        }
-
-        if (ts->avio_write(ts->avio_context, ts_packet->buf, TS_MUXER_TX_PACKET_SIZE) < 0) {
-            av_log(NULL, AV_LOG_ERROR, "Failed to write AAC packet to avio context");
-        }
-    }
-
-    return 0;
-
-}
-
-
-/* PES IEC 13818-1 2.4.3.7
- *
- */
-static int
-ts_muxer_prepare_h264_pes(ts_muxer_h264_stream_t *stream, ts_muxer_h264_pes_t *pes, av_packet_t *av_packet)
-{
-    uint8_t    *buf;
-
-    if (NULL == pes || NULL == stream || NULL == av_packet) {
-        return -1;
-    }
-
-    memset(pes, 0, sizeof(ts_muxer_h264_pes_t));
-    pes->start = 1;
-    pes->is_IDR = av_packet->flags & AV_PACKET_FLAGS_IS_IDR;
-    pes->pid = stream->pid;
-    pes->dts = av_packet->dts;
-    pes->pts = av_packet->pts;
-    pes->payload = av_packet->data;
-    pes->payload_len = av_packet->size;
-    pes->filled = 0;
-
-    // PES header
-    buf = pes->header_data;
-    // 3 bytes packet_start_code_prefix
-    *buf++ = 0x00;
-    *buf++ = 0x00;
-    *buf++ = 0x01;
-    *buf++ = 0xE0; // 1 byte stream_id
-    // 2 byte PES length, let's make it 0 for simplicity
-    *buf++ = 0x00;
-    *buf++ = 0x00;
-    *buf++ = 0x80;
-    if (pes->dts < 0) {
-        // no DTS
-        *buf++ = 0x80;
-        *buf++ = 0x05;  // 1 byte PES_header_data_length
-    } else {
-        // PTS and DTS
-        *buf++ = 0xC0;
-        *buf++ = 0x0A;  // 1 byte PES_header_data_length
-    }
-    // 5 bytes PTS
-    *buf++ = 0x31 | ((pes->pts >> 29) & 0x0E);
-    *buf++ = pes->pts >> 22;
-    *buf++ = (pes->pts >> 14) | 0x01;
-    *buf++ = pes->pts >> 7;
-    *buf++ = (pes->pts << 1) | 0x01;
-    if (pes->dts >= 0) {
-        *buf++ = 0x11 | ((pes->dts >> 29) & 0x0E);
-        *buf++ = pes->dts >> 22;
-        *buf++ = (pes->dts >> 14) | 0x01;
-        *buf++ = pes->dts >> 7;
-        *buf++ = (pes->dts << 1) | 0x01;
-    }
-    // PES body
-    // AU delimiter
-    ts_muxer_set_32value(buf, 1);
-    buf += 4;
-    *buf++ = 0x09;
-    if (pes->is_IDR) {
-        *buf++ = 0x10;
-    } else {
-        *buf++ = 0x30;
-    }
-
-    // let's add synchronization byte sequence before VCL NALU
-    //ts_muxer_set_32value(buf, 1);
-    //buf += 4;
-
-    pes->header_len = buf - pes->header_data;
-
-    return 0;
-}
-
-
 /* IEC 14496-3:3005 1.a.3.2
  * One PES for each chunk, which contains multiple samples
  * and one ADTS for each frame
  *
  * PES IEC 13818-1 2.4.3.7
  */
-static int
-ts_muxer_prepare_aac_pes(ts_muxer_aac_stream_t *stream, ts_muxer_aac_pes_t *pes, av_packet_t *av_packet)
+int ts_muxer_prepare_aac_pes(ts_muxer_aac_stream_t *stream, ts_muxer_aac_pes_t *pes, av_packet_t *av_packet)
 {
     uint8_t                  *buf;
     size_t                   adts_frame_len;
@@ -841,6 +767,74 @@ ts_muxer_prepare_aac_pes(ts_muxer_aac_stream_t *stream, ts_muxer_aac_pes_t *pes,
 }
 
 
+int ts_muxer_enc_aac_packet(ts_muxer_t* ts, ts_muxer_aac_stream_t* aac_stream, av_packet_t* av_packet) {
+
+    ts_muxer_aac_pes_t* pes;
+    ts_muxer_ts_packet_t* ts_packet;
+    uint8_t* pos;
+    size_t len;
+
+    if (NULL == ts || NULL == aac_stream || NULL == av_packet) {
+        return -1;
+    }
+
+    pes = &aac_stream->pes;
+    ts_packet = &ts->ts_packet;
+
+    if (0 != ts_muxer_prepare_aac_pes(aac_stream, pes, av_packet)) {
+        return -1;
+    }
+
+    while (pes->header_len + pes->payload_len > pes->filled && pes->header_len != 0) {
+
+        // prepare packet
+        if (0 != ts_muxer_prepare_ts_packet_info(ts_packet, TS_MUXER_PAYLOAD_AAC_PES, pes, aac_stream->continuity_count)) {
+            av_log(NULL, AV_LOG_ERROR, "Failed to prepare TS packet for AAC frame");
+            return -1;
+        }
+
+        // encode TS packet
+        pos = ts_muxer_enc_packet_header(ts_packet, ts_packet->buf);
+        if (NULL == pos) {
+            av_log(NULL, AV_LOG_ERROR, "Failed to encode TS packet for AAC PES");
+            return -1;
+        }
+
+        // fill PES into TS packet
+        pes->start = 0;
+        if (pes->filled < pes->header_len) {
+            // fill PES header part
+            len = MIN(pes->header_len - pes->filled, TS_MUXER_TX_PACKET_SIZE+ts_packet->buf-pos);
+            memcpy(pos, pes->header_data+pes->filled, len);
+            pos += len;
+            pes->filled += len;
+        }
+
+        if (pes->filled >= pes->header_len) {
+            len = MIN(pes->payload_len+pes->header_len-pes->filled, TS_MUXER_TX_PACKET_SIZE+ts_packet->buf-pos);
+            if (len) {
+                memcpy(pos, pes->payload+(pes->filled-pes->header_len), len);
+                pos += len;
+                pes->filled += len;
+            }
+        }
+
+        // there should not be end stuffing for PES TS packet
+        aac_stream->continuity_count++;
+        if (aac_stream->continuity_count > 0x0F) {
+            aac_stream->continuity_count = 0;
+        }
+
+        if (ts->avio_write(ts->avio_context, ts_packet->buf, TS_MUXER_TX_PACKET_SIZE) < 0) {
+            av_log(NULL, AV_LOG_ERROR, "Failed to write AAC packet to avio context");
+        }
+    }
+
+    return 0;
+
+}
+
+
 ts_muxer_t* new_ts_muxer(av_stream_t* av_streams, int stream_count) {
 
     struct _ts_muxer* ts_muxer;
@@ -890,6 +884,8 @@ int ts_muxer_set_avio_context(ts_muxer_t* ts_muxer, void* avio_context, avio_wri
 
     ts_muxer->avio_context = avio_context;
     ts_muxer->avio_write = avio_write;
+
+    return 0;
 }
 
 
@@ -994,7 +990,7 @@ int ts_muxer_write_packet(ts_muxer_t* ts_muxer, av_packet_t* av_packet) {
                && av_stream->codec == AV_STREAM_CODEC_AAC
                && ts_muxer->program.audio_stream.stream_type == TS_MUXER_STREAM_TYPE_AAC
                && ts_muxer->program.audio_stream.stream_index == av_packet->av_stream_index) {
-        return ts_muxer_enc_aac_packet(ts_muxer, &ts_muxer->program.video_stream, av_packet);
+        return ts_muxer_enc_aac_packet(ts_muxer, &ts_muxer->program.audio_stream, av_packet);
     } else {
         av_log(NULL, AV_LOG_ERROR, "Unprepared stream type %d stream codec %d", av_stream->type, av_stream->codec);
         return -1;
