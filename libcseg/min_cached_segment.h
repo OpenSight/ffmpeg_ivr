@@ -29,9 +29,57 @@
 
 #include "config.h"
 
+#include "ts_muxer.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+
+/* error handling */
+#if EDOM > 0
+#define CSEG_ERROR(e) (-(e))   ///< Returns a negative error code from a POSIX error code, to return from library functions.
+#else
+/* Some platforms have E* and errno already negated. */
+#define CSEG_ERROR(e) (e)
+#endif
+
+/**
+ * Something went really wrong and we will crash now.
+ */
+#define CSEG_LOG_PANIC     0
+/**
+ * Something went wrong and recovery is not possible.
+ * For example, no header was found for a format which depends
+ * on headers or an illegal combination of parameters is used.
+ */
+#define CSEG_LOG_FATAL     8
+/**
+ * Something went wrong and cannot losslessly be recovered.
+ * However, not all future data is affected.
+ */
+#define CSEG_LOG_ERROR    16
+/**
+ * Something somehow does not look correct. This may or may not
+ * lead to problems. An example would be the use of '-vstrict -2'.
+ */
+#define CSEG_LOG_WARNING  24
+/**
+ * Standard information.
+ */
+#define CSEG_LOG_INFO     32
+/**
+ * Detailed information.
+ */
+#define CSEG_LOG_VERBOSE  40
+/**
+ * Stuff which is only useful for libav* developers.
+ */
+#define CSEG_LOG_DEBUG    48
+/**
+ * Extremely verbose debugging, useful for libav* development.
+ */
+#define CSEG_LOG_TRACE    56
 
 
 struct CachedSegmentContext;
@@ -104,68 +152,162 @@ typedef struct CachedSegmentWriter {
 } CachedSegmentWriter;
     
 
-typedef enum CachedSegmentFlags {
-    CSEG_FLAG_NONBLOCK = (1 << 0),
-} CachedSegmentFlags;
-
-
-
+#define  MAX_STREAM_NUM    4
 
 struct CachedSegmentContext {
-    const AVClass *context_class;  // Class for private options.
     
     char *filename;
-    char *format_options_str;   //mpegts options string
-    AVDictionary *format_options; //mpegts options
     
+    
+    // current segment number
     unsigned number;
+    
+    // current segment sequence
     int64_t sequence;
     
-    AVOutputFormat *oformat;
-    AVFormatContext *avf;
-    
-    CachedSegment * cur_segment;
-    unsigned char * out_buffer;
-    
-    int64_t start_sequence;
-    double start_ts;        //the timestamp for the start_pts, start ts for the whole video
+   
+    //the timestamp (seconds from epoch) for the start_pts, start ts for the whole video
+    double start_ts;     
+
+    //the duration (in seconds) for one segment   
     double time;            // Set by a private option.
-    int max_nb_segments;   // Set by a private option.
-    uint32_t max_seg_size;      // max size for a segment in bytes, set by a private option
-    uint32_t flags;        // enum HLSFlags
-
-    int use_localtime;      ///< flag to expand filename with localtime
-    int64_t recording_time;  // segment length in 1/AV_TIME_BASE sec
-    int has_video;
-    int has_subtitle;
-    int64_t start_pts;    // start pts for the whole list
-
-    int64_t start_pos;    // current segment starting position
-
-    double pre_recoding_time;   // at least pre_recoding_time should be kept in cached
-                                // when segment persistence is disabbled, 
     
+    //max segment number in the cached list
+    int max_nb_segments;   
+    
+    //max size (in bytes) for one segment
+    uint32_t max_seg_size;      
+
+    // segment length in 1/90K sec
+    int64_t recording_time;  
+    
+    // if there is video stream
+    int has_video;
+    
+    // start pts (in 1/90K sec) for the whole list
+    int64_t start_pts;    
+
+    // current segment starting position
+    int64_t start_pos;    
+
+    // at least pre_recoding_time should be kept in cached
+    // when segment persistence is disabbled,     
+    double pre_recoding_time;   
+    
+    //writer pthread id
     pthread_t consumer_thread_id;
+    
+    //writer pthread active flag
     volatile int consumer_active;
+    
+    //writer pthread exit code
     volatile int consumer_exit_code;
+    
+    // writer IO timeout (in sec)
+    int32_t io_timeout;  
+  
 //#define CONSUMER_ERR_STR_LEN 1024
     //char consumer_err_str[CONSUMER_ERR_STR_LEN];
     
     pthread_mutex_t mutex;
     pthread_cond_t not_empty;
+    
+    //segment in cache to write
     CachedSegmentList cached_list;
+    
+    //free segments
     CachedSegmentList free_list;
     
     CachedSegmentWriter *writer;
     void * writer_priv;
-    int32_t writer_timeout;
+
+    
+    //stream configuration
+    av_stream_t streams[MAX_STREAM_NUM];
+    uint8_t stream_count;
+    
+    //underlayer ts muxer for the cseg context
+    ts_muxer_t* ts_muxer;
+    
+    // current writing segment
+    CachedSegment * cur_segment;
+    
+    //user's private data
+    void * private_data;
 };
 
-extern AVOutputFormat ff_cached_segment_muxer;
 
-void register_segment_writer(CachedSegmentWriter * writer);
+/**
+ * allocate and initialize a cseg context
+ *
+ * This function will malloc a cseg context and configure it according to the 
+ * given parameters. And the returned cseg context must be freed with 
+ * release_cseg_muxer() at last
+ *
+ * @param filename URL to write
+ * @param streams  the arrays contains the configuration of each stream
+ * @param stream_count   the stream number available
+ * @param start_sequence  the start sequence for the first segment
+ * @param segment_time  the segment duration in seconds
+ * @param max_nb_segments  the max segment number in the cached list
+ * @param max_seg_size  the max size of one segment in bytes
+ * @param pre_recoding_time  the pre-record time in seconds when writer is mute
+ * @param start_ts  the start timestamp (in seconds, from epoch) of the first segment
+ *                  when it is given 0 or negative, this context would tate the 
+ *                  system current time as it.
+ * @param io_timeout  the timeout time (in seconds) for writer IO
+ * @param private_data the user private data
+ * @param cseg  the output cseg muxer context
+ * 
+ * @return 0 on success, a negative number on error. 
+ *
+ */
+int init_cseg_muxer(char * filename,
+                    av_stream_t* streams, uint8_t stream_count,
+                    uint64_t start_sequence, 
+                    double segment_time,
+                    int max_nb_segments,
+                    uint32_t max_seg_size, 
+                    double pre_recoding_time,  
+                    double start_ts,  
+                    int32_t io_timeout,
+                    void * private_data,                  
+                    CachedSegmentContext **cseg);
+                    
+                    
+/**
+ * write a packet to the cseg context
+ *
+ * This function is used to write a video/audio frame to the cseg context which is
+ * initialized by init_cseg_muxer(). the cseg muxer would muxing all the packet to
+ * the TS muxer and divided them according to HLS
+ *
+ * @param cseg the cseg muxer  to write
+ * @param pkt  the packet to write the cseg muxer
 
-void register_cseg(void);
+ * 
+ * @return 0 on success, a negative number on error. 
+ *
+ */
+int cseg_write_packet(CachedSegmentContext *cseg, av_packet_t *pkt);
+
+
+/**
+ * release the cseg muxer context
+ *
+ * this function is to free the cseg muxer context which must be 
+ * allocated and initialized by init_cseg_muxer() before.
+ * all the cseg muxer context initialized by init_cseg_muxer()
+ * must be free by this function
+ * 
+ *
+ * @param cseg the cseg muxer to release
+ * 
+ *
+ */
+void release_cseg_muxer(CachedSegmentContext *cseg);
+
+
 
 #ifdef __cplusplus
 }

@@ -7,6 +7,11 @@
 
 #include "stdint.h"
 
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef enum {
     AV_STREAM_TYPE_AUDIO,
     AV_STREAM_TYPE_VIDEO
@@ -30,7 +35,19 @@ typedef struct {
     av_stream_t** streams;
 }av_context_t;
 
-#define AV_PACKET_FLAGS_IS_IDR  0x01
+#define AV_PACKET_FLAGS_KEY  0x01
+
+
+/**
+ * Undefined timestamp value
+ *
+ * Usually reported by demuxer that work on containers that do not provide
+ * either pts or dts.
+ */
+
+#define   NOPTS_VALUE          ((int64_t)-1)
+
+#define   TS_TIME_BASE        ((int64_t)90000)
 
 typedef struct {
     int stream_index;
@@ -57,5 +74,9 @@ int ts_muxer_write_header(ts_muxer_t*);
 int ts_muxer_write_packet(ts_muxer_t*, av_packet_t*);
 int ts_muxer_write_trailer(ts_muxer_t*);
 
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif //FFMPEG_IVR_TS_MUXER_H_H

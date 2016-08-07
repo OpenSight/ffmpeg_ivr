@@ -753,7 +753,7 @@ ts_muxer_prepare_h264_pes(ts_muxer_h264_stream_t *stream, ts_muxer_h264_pes_t *p
 
     memset(pes, 0, sizeof(ts_muxer_h264_pes_t));
     pes->start = 1;
-    pes->is_IDR = av_packet->flags & AV_PACKET_FLAGS_IS_IDR;
+    pes->is_IDR = av_packet->flags & AV_PACKET_FLAGS_KEY;
     pes->pid = stream->pid;
     pes->dts = av_packet->dts;
     pes->pts = av_packet->pts;

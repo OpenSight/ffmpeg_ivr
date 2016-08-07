@@ -32,13 +32,18 @@ extern "C" {
 #define FRAGMENT_SIZE  65535  //64KB
 #define FRAGMENT_BUF_SIZE   (FRAGMENT_SIZE - 16)   //16Bytes is used for fragment header
 
-#define SEGMENT_IO_BUFFER_SIZE 32768
 #define MAX_URL_SIZE 4096
 
-//#define   av_malloc   malloc
-//#define   av_free     free
-//#define   av_log(level, fmt, args...)   fprintf(stderr, fmt, ##args)
+#define   cseg_malloc   malloc
+#define   cseg_free     free
+#define   cseg_log(level, fmt, args...)   fprintf(stderr, fmt, ##args)
+#define   cseg_strdup   strdup
 
+#define   cseg_freep(p)   \
+    if((p) != NULL && (*(p)) != NULL){ \
+        cseg_free(*(p));               \
+        *(p) = NULL;                   \
+    }
 
 
 #ifdef __cplusplus
