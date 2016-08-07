@@ -26,7 +26,11 @@
 #include <pthread.h>
 #include <math.h>
 #include <strings.h>
+#include <string.h>
 #include <errno.h>
+#include <stdlib.h>
+#include <stdio.h>
+
 
 #include "config.h"    
 #include "min_cached_segment.h"
@@ -138,7 +142,7 @@ static int av_match_name(const char *name, const char *names)
         names = p + 1;
     }
     return !strcasecmp(name, names);
-
+}
 
 //////////////////////////
 //segment operation
@@ -164,7 +168,7 @@ CachedSegment * cached_segment_alloc(uint32_t max_size)
     s->tail = NULL;      
     
 /*    
-    av_log(NULL, AV_LOG_WARNING, 
+    cseg_log(CSEG_LOG_WARNING, 
            "new segment(size:%d) allocated\n",
            max_size);
 */
@@ -310,7 +314,8 @@ void register_segment_writer(CachedSegmentWriter * writer)
     writer->next = first_writer;
     first_writer = writer;
 }
-static CachedSegmentWriter *find_segment_writer(char * filename)
+
+CachedSegmentWriter *find_segment_writer(char * filename)
 {
     char hostname[1024], hoststr[1024], proto[16];
     char auth[1024];
@@ -339,7 +344,7 @@ static CachedSegmentWriter *find_segment_writer(char * filename)
 //cseg format operations
 
 
-static CachedSegment * get_free_segment(CachedSegmentContext *cseg)
+CachedSegment * get_free_segment(CachedSegmentContext *cseg)
 {
     CachedSegment * segment = NULL;
     pthread_mutex_lock(&cseg->mutex);
@@ -354,7 +359,7 @@ static CachedSegment * get_free_segment(CachedSegmentContext *cseg)
     return segment;
 }
 
-static void recycle_free_segment(CachedSegmentContext *cseg, CachedSegment * segment)
+void recycle_free_segment(CachedSegmentContext *cseg, CachedSegment * segment)
 {
     cached_segment_reset(segment);
     pthread_mutex_lock(&cseg->mutex);        
@@ -363,9 +368,8 @@ static void recycle_free_segment(CachedSegmentContext *cseg, CachedSegment * seg
 }
 
 /* append current segment to the cached segment list */
-static int append_cur_segment(AVFormatContext *s)
+int append_cur_segment(CachedSegmentContext *cseg)
 {
-    CachedSegmentContext *cseg = (CachedSegmentContext *)s->priv_data;
     CachedSegment * segment = cseg->cur_segment;
     
     if(segment == NULL){
@@ -395,7 +399,7 @@ static int append_cur_segment(AVFormatContext *s)
         put_segment_list(&(cseg->free_list), segment);         
     }else{
 /*
-        cseg_log(s, AV_LOG_INFO, 
+        cseg_log(CSEG_LOG_INFO, 
                 "One Segment(size:%d, start_ts:%f, duration:%f, pos:%lld, sequence:%lld) "
                 "is added to cached list(len:%d)\n", 
                 segment->size, 
@@ -459,7 +463,7 @@ static void * consumer_routine(void *arg)
         }// while((segment = cseg->cached_list.first) != NULL){
         
         //clean up the expired segments
-        if(pre_recoding_time < 0.001){
+        if(cseg->pre_recoding_time < 0.001){
             keep_seg_num = 0;
         }else{
             keep_seg_num = MIN((uint32_t)ceil(cseg->pre_recoding_time / cseg->time), 
@@ -572,7 +576,7 @@ int init_cseg_muxer(char * filename,
     }    
 
     if(streams == NULL || stream_count == 0){
-        cseglog(CSEG_LOG_ERROR,
+        cseg_log(CSEG_LOG_ERROR,
                "streams config invalid\n");
         return CSEG_ERROR(EINVAL);        
     }
@@ -609,7 +613,7 @@ int init_cseg_muxer(char * filename,
 
     for (i = 0; i < stream_count; i++) {
         new_cseg->has_video +=
-            streams[i]->type == AV_STREAM_TYPE_VIDEO;
+            streams[i].type == AV_STREAM_TYPE_VIDEO;
         memcpy(&(new_cseg->streams[i]), &(streams[i]), sizeof(av_stream_t)); 
     }
 
@@ -624,7 +628,7 @@ int init_cseg_muxer(char * filename,
     init_segment_list(&new_cseg->free_list);    
 
         
-    if((new_cseg->ts = new_ts_muxer(streams, stream_count)) == NULL){
+    if((new_cseg->ts_muxer = new_ts_muxer(streams, stream_count)) == NULL){
         ret = CSEG_ERROR(ENOMEM);
         goto fail;
     }
@@ -634,7 +638,7 @@ int init_cseg_muxer(char * filename,
 
     
     //find writer
-    new_cseg->writer = find_segment_writer(cseg->filename);
+    new_cseg->writer = find_segment_writer(new_cseg->filename);
     if(!new_cseg->writer){
         cseg_log(CSEG_LOG_ERROR, "No writer found for url:%s\n", new_cseg->filename);
         ret = CSEG_ERROR(ENOSYS);  
@@ -685,7 +689,7 @@ fail:
             new_cseg->ts_muxer = NULL;            
         }
         
-        av_freep(&new_cseg->filename);
+        cseg_freep(&new_cseg->filename);
         
         pthread_cond_destroy(&new_cseg->not_empty);
         pthread_mutex_destroy(&new_cseg->mutex);  
@@ -702,18 +706,18 @@ fail:
 int cseg_write_packet(CachedSegmentContext *cseg, av_packet_t *pkt)
 {
 
-    av_stream_t *st = &(cseg->streams[pkt->stream_index]);
+    av_stream_t *st = &(cseg->streams[pkt->av_stream_index]);
     int64_t end_pts = cseg->recording_time * cseg->number;
     int is_ref_pkt = 1;
     int ret, can_split = 1;
     int stream_index = 0;
 
-    stream_index = pkt->stream_index;
+    stream_index = pkt->av_stream_index;
     
     if(cseg->consumer_exit_code){
         //consumer error
 /*
-        av_log(s, AV_LOG_ERROR, 
+        cseg_log(CSEG_LOG_ERROR, 
                "Consumer Error:%s\n",
                cseg->consumer_err_str[0] == 0?
                "unknown":cseg->consumer_err_str); 
@@ -735,7 +739,7 @@ int cseg_write_packet(CachedSegmentContext *cseg, av_packet_t *pkt)
                 struct timeval tv;
                 gettimeofday(&tv, NULL);
                 if(tv.tv_sec < 31536000){   //not valid
-                    cseg->start_pts = AV_NOPTS_VALUE;
+                    cseg->start_pts = NOPTS_VALUE;
                     cseg_log(CSEG_LOG_ERROR, 
                            "gettimeofday error, the timestamp is invalid\n");                     
                     return CSEG_ERROR(EFAULT);
@@ -826,7 +830,7 @@ void release_cseg_muxer(CachedSegmentContext *cseg)
         int64_t cur_segment_size = 0;
         int is_cached_list_full = 0;
 
-        ts_muxer_set_avio_context(cseg->ts_muxer, NULL, NULL)
+        ts_muxer_set_avio_context(cseg->ts_muxer, NULL, NULL);
         
         pthread_mutex_lock(&cseg->mutex);
         if(cseg->cached_list.seg_num >= cseg->max_nb_segments){
@@ -888,7 +892,7 @@ void release_cseg_muxer(CachedSegmentContext *cseg)
     free_segment_list(&(cseg->cached_list));
     free_segment_list(&(cseg->free_list));
 
-    av_freep(&cseg->filename);
+    cseg_freep(&cseg->filename);
 
  
     pthread_cond_destroy(&cseg->not_empty);

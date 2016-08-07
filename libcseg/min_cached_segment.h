@@ -19,15 +19,16 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
 **/
 
+#ifndef MIN_CACHED_SEGMENT_H
+#define MIN_CACHED_SEGMENT_H
 
 
 #include <float.h>
 #include <stdint.h>
 #include <unistd.h>
-#include "libavformat/avformat.h"
-
-
 #include "config.h"
+
+#include "libcseg.h"
 
 #include "ts_muxer.h"
 
@@ -83,7 +84,6 @@ extern "C" {
 
 
 struct CachedSegmentContext;
-typedef struct CachedSegmentContext CachedSegmentContext;
 
 typedef struct fragment {
     struct fragment * next;
@@ -140,7 +140,7 @@ typedef struct CachedSegmentWriter {
     
     struct CachedSegmentWriter * next; //next register writer
     
-    //return 0 on success, a negative AVERROR on failure.
+    //return 0 on success, a negative CSEG_ERROR on failure.
     int (*init)(CachedSegmentContext *cseg);
     
     //return 0 on success, 
@@ -149,6 +149,8 @@ typedef struct CachedSegmentWriter {
     int (*write_segment)(CachedSegmentContext *cseg, CachedSegment *segment);
     
     void (*uninit)(CachedSegmentContext *cseg);
+    
+    
 } CachedSegmentWriter;
     
 
@@ -237,78 +239,12 @@ struct CachedSegmentContext {
 };
 
 
-/**
- * allocate and initialize a cseg context
- *
- * This function will malloc a cseg context and configure it according to the 
- * given parameters. And the returned cseg context must be freed with 
- * release_cseg_muxer() at last
- *
- * @param filename URL to write
- * @param streams  the arrays contains the configuration of each stream
- * @param stream_count   the stream number available
- * @param start_sequence  the start sequence for the first segment
- * @param segment_time  the segment duration in seconds
- * @param max_nb_segments  the max segment number in the cached list
- * @param max_seg_size  the max size of one segment in bytes
- * @param pre_recoding_time  the pre-record time in seconds when writer is mute
- * @param start_ts  the start timestamp (in seconds, from epoch) of the first segment
- *                  when it is given 0 or negative, this context would tate the 
- *                  system current time as it.
- * @param io_timeout  the timeout time (in seconds) for writer IO
- * @param private_data the user private data
- * @param cseg  the output cseg muxer context
- * 
- * @return 0 on success, a negative number on error. 
- *
- */
-int init_cseg_muxer(char * filename,
-                    av_stream_t* streams, uint8_t stream_count,
-                    uint64_t start_sequence, 
-                    double segment_time,
-                    int max_nb_segments,
-                    uint32_t max_seg_size, 
-                    double pre_recoding_time,  
-                    double start_ts,  
-                    int32_t io_timeout,
-                    void * private_data,                  
-                    CachedSegmentContext **cseg);
-                    
-                    
-/**
- * write a packet to the cseg context
- *
- * This function is used to write a video/audio frame to the cseg context which is
- * initialized by init_cseg_muxer(). the cseg muxer would muxing all the packet to
- * the TS muxer and divided them according to HLS
- *
- * @param cseg the cseg muxer  to write
- * @param pkt  the packet to write the cseg muxer
 
- * 
- * @return 0 on success, a negative number on error. 
- *
- */
-int cseg_write_packet(CachedSegmentContext *cseg, av_packet_t *pkt);
-
-
-/**
- * release the cseg muxer context
- *
- * this function is to free the cseg muxer context which must be 
- * allocated and initialized by init_cseg_muxer() before.
- * all the cseg muxer context initialized by init_cseg_muxer()
- * must be free by this function
- * 
- *
- * @param cseg the cseg muxer to release
- * 
- *
- */
-void release_cseg_muxer(CachedSegmentContext *cseg);
 
 
 
 #ifdef __cplusplus
 }
 #endif
+
+#endif //MIN_CACHED_SEGMENT_H

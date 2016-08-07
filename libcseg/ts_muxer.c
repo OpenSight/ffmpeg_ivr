@@ -420,7 +420,7 @@ int ts_muxer_enc_psi(struct _ts_muxer *ts)
     }
 
     if (ts->avio_write(ts->avio_context, buf, TS_MUXER_TX_PACKET_SIZE) < 0) {
-        av_log(NULL, AV_LOG_ERROR, "Failed to write PAT packet to avio context");
+        cseg_log(LOG_ERROR, "Failed to write PAT packet to avio context");
     }
 
     // PMT
@@ -488,7 +488,7 @@ int ts_muxer_enc_psi(struct _ts_muxer *ts)
     }
 
     if (ts->avio_write(ts->avio_context, packet->buf, TS_MUXER_TX_PACKET_SIZE) < 0) {
-        av_log(NULL, AV_LOG_ERROR, "Failed to write PMT packet to avio context");
+        cseg_log(CSEG_LOG_ERROR, "Failed to write PMT packet to avio context");
     }
 
     return 0;
@@ -594,14 +594,14 @@ int ts_muxer_enc_h264_packet(ts_muxer_t* ts, ts_muxer_h264_stream_t* h264_stream
 
         // prepare av_packet
         if (0 != ts_muxer_prepare_ts_packet_info(ts_packet, TS_MUXER_PAYLOAD_H264_PES, pes, h264_stream->continuity_count)) {
-            av_log(NULL, AV_LOG_ERROR, "Failed to prepare TS av_packet for H264 frame");
+            cseg_log(CSEG_LOG_ERROR, "Failed to prepare TS av_packet for H264 frame");
             return -1;
         }
 
         // encode TS av_packet
         pos = ts_muxer_enc_packet_header(ts_packet, ts_packet->buf);
         if (NULL == pos) {
-            av_log(NULL, AV_LOG_ERROR, "Failed to encode TS av_packet for H.264 PES");
+            cseg_log(_LOG_ERROR, "Failed to encode TS av_packet for H.264 PES");
             return -1;
         }
 
@@ -632,7 +632,7 @@ int ts_muxer_enc_h264_packet(ts_muxer_t* ts, ts_muxer_h264_stream_t* h264_stream
         }
 
         if (ts->avio_write(ts->avio_context, ts_packet->buf, TS_MUXER_TX_PACKET_SIZE) < 0) {
-            av_log(NULL, AV_LOG_ERROR, "Failed to write H264 packet to avio context");
+            cseg_log(CSEG_LOG_ERROR, "Failed to write H264 packet to avio context");
         }
     }
 
@@ -713,7 +713,7 @@ int ts_muxer_prepare_aac_pes(ts_muxer_aac_stream_t *stream, ts_muxer_aac_pes_t *
             if (stream->object_type_indication == 0x69
                 || stream->object_type_indication == 0x6B) {
                 // mp3 (MPEG-1 layer III or MPEG-2 layer III)
-                av_log(NULL, AV_LOG_ERROR, "flv we don't support MP3 audio currently");
+                cseg_log(CSEG_LOG_ERROR, "flv we don't support MP3 audio currently");
                 return -1;
             } else {
                 // MPEG-2 AAC
@@ -740,7 +740,7 @@ int ts_muxer_prepare_aac_pes(ts_muxer_aac_stream_t *stream, ts_muxer_aac_pes_t *
 
         adts_frame_len = 7 + pes->payload_len;
         if (adts_frame_len >= 1 << 13) {
-            av_log(NULL, AV_LOG_ERROR, "flv ADTS frame too large");
+            cseg_log(CSEG_LOG_ERROR, "flv ADTS frame too large");
             return -1;
         }
 
@@ -757,7 +757,7 @@ int ts_muxer_prepare_aac_pes(ts_muxer_aac_stream_t *stream, ts_muxer_aac_pes_t *
 
     // finally PES length
     if (pes->header_len+pes->payload_len-6+1 >= 1<<16) {
-        av_log(NULL, AV_LOG_ERROR, "FLV AAC audio PES too large");
+        cseg_log(CSEG_LOG_ERROR, "FLV AAC audio PES too large");
         return -1;
     }
     pes->header_data[4] = (pes->header_len + pes->payload_len - 6)>>8;
@@ -789,14 +789,14 @@ int ts_muxer_enc_aac_packet(ts_muxer_t* ts, ts_muxer_aac_stream_t* aac_stream, a
 
         // prepare packet
         if (0 != ts_muxer_prepare_ts_packet_info(ts_packet, TS_MUXER_PAYLOAD_AAC_PES, pes, aac_stream->continuity_count)) {
-            av_log(NULL, AV_LOG_ERROR, "Failed to prepare TS packet for AAC frame");
+            cseg_log(CSEG_LOG_ERROR, "Failed to prepare TS packet for AAC frame");
             return -1;
         }
 
         // encode TS packet
         pos = ts_muxer_enc_packet_header(ts_packet, ts_packet->buf);
         if (NULL == pos) {
-            av_log(NULL, AV_LOG_ERROR, "Failed to encode TS packet for AAC PES");
+            cseg_log(CSEG_LOG_ERROR, "Failed to encode TS packet for AAC PES");
             return -1;
         }
 
@@ -826,7 +826,7 @@ int ts_muxer_enc_aac_packet(ts_muxer_t* ts, ts_muxer_aac_stream_t* aac_stream, a
         }
 
         if (ts->avio_write(ts->avio_context, ts_packet->buf, TS_MUXER_TX_PACKET_SIZE) < 0) {
-            av_log(NULL, AV_LOG_ERROR, "Failed to write AAC packet to avio context");
+            cseg_log(CSEG_LOG_ERROR, "Failed to write AAC packet to avio context");
         }
     }
 
@@ -840,12 +840,12 @@ ts_muxer_t* new_ts_muxer(av_stream_t* av_streams, int stream_count) {
     struct _ts_muxer* ts_muxer;
 
     if (av_streams == NULL) {
-        av_log(NULL, AV_LOG_ERROR, "NULL av_streams");
+        cseg_log(CSEG_LOG_ERROR, "NULL av_streams");
         return NULL;
     }
 
     if (stream_count == 0) {
-        av_log(NULL, AV_LOG_ERROR, "Stream count can not be 0");
+        cseg_log(CSEG_LOG_ERROR, "Stream count can not be 0");
         return NULL;
     }
 
@@ -853,7 +853,7 @@ ts_muxer_t* new_ts_muxer(av_stream_t* av_streams, int stream_count) {
 
     ts_muxer = malloc(sizeof(struct _ts_muxer));
     if (ts_muxer == NULL) {
-        av_log(NULL, AV_LOG_ERROR, "Failed to malloc ts_muxer");
+        cseg_log(CSEG_LOG_ERROR, "Failed to malloc ts_muxer");
         return NULL;
     }
     memset(ts_muxer, 0, sizeof(struct _ts_muxer));
@@ -878,7 +878,7 @@ void free_ts_muxer(ts_muxer_t* ts_muxer) {
 int ts_muxer_set_avio_context(ts_muxer_t* ts_muxer, void* avio_context, avio_write_func avio_write) {
 
     if (NULL == ts_muxer) {
-        av_log(NULL, AV_LOG_ERROR, "Failed to set avio context, ts_muxer is NULL");
+        cseg_log(CSEG_LOG_ERROR, "Failed to set avio context, ts_muxer is NULL");
         return -1;
     }
 
@@ -928,7 +928,7 @@ int ts_muxer_write_header(ts_muxer_t* ts_muxer) {
                 for (i = 0; ts_muxer_aac_sample_frequencies[i] != 0 && ts_muxer_aac_sample_frequencies[i] != av_stream->audio_sample_rate; i++) {
                 }
                 if (ts_muxer_aac_sample_frequencies[i] == 0) {
-                    av_log(NULL, AV_LOG_ERROR, "Invalid audio sample frequency %d", av_stream->audio_sample_rate);
+                    cseg_log(CSEG_LOG_ERROR, "Invalid audio sample frequency %d", av_stream->audio_sample_rate);
                     return -1;
                 }
                 ts_muxer->program.audio_stream.aac_sampling_frequency_index = i;
@@ -937,7 +937,7 @@ int ts_muxer_write_header(ts_muxer_t* ts_muxer) {
     }
 
     if (0 == ts_muxer->program.pmt_pid) {
-        av_log(NULL, AV_LOG_ERROR, "failed find either video or audio stream");
+        cseg_log(CSEG_LOG_ERROR, "failed find either video or audio stream");
         return -1;
     }
 
@@ -970,13 +970,13 @@ int ts_muxer_write_packet(ts_muxer_t* ts_muxer, av_packet_t* av_packet) {
     }
 
     if (av_packet->av_stream_index >= ts_muxer->av_stream_count) {
-        av_log(NULL, AV_LOG_ERROR, "Invalid stream count %d in av packet", av_packet->av_stream_index);
+        cseg_log(CSEG_LOG_ERROR, "Invalid stream count %d in av packet", av_packet->av_stream_index);
         return -1;
     }
 
     av_stream = &ts_muxer->av_streams[av_packet->av_stream_index];
     if (av_stream == NULL) {
-        av_log(NULL, AV_LOG_ERROR, "stream %d is NULL in av context", av_packet->av_stream_index);
+        cseg_log(CSEG_LOG_ERROR, "stream %d is NULL in av context", av_packet->av_stream_index);
         return -1;
     }
 
@@ -992,7 +992,7 @@ int ts_muxer_write_packet(ts_muxer_t* ts_muxer, av_packet_t* av_packet) {
                && ts_muxer->program.audio_stream.stream_index == av_packet->av_stream_index) {
         return ts_muxer_enc_aac_packet(ts_muxer, &ts_muxer->program.audio_stream, av_packet);
     } else {
-        av_log(NULL, AV_LOG_ERROR, "Unprepared stream type %d stream codec %d", av_stream->type, av_stream->codec);
+        cseg_log(CSEG_LOG_ERROR, "Unprepared stream type %d stream codec %d", av_stream->type, av_stream->codec);
         return -1;
     }
 }

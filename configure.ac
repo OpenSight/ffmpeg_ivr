@@ -22,6 +22,13 @@ AC_CONFIG_SRCDIR([src/ffmpeg_ivr.c])
 AC_CONFIG_HEADERS([config.h])
 
 
+AC_ARG_WITH([libcseg], 
+[AS_HELP_STRING([--with-libcseg], 
+[would build the libcseg library @<:@default=no@:>@])], 
+[libcseg_library=${withval}], [libcseg_library=no]) 
+
+AM_CONDITIONAL([INCLUDE_LIBCSEG], [test "x$libcseg_library" = xyes])
+
 
 # Checks for programs.
 AC_PROG_CXX
@@ -42,6 +49,8 @@ CXXFLAGS="-pthread $CXXFLAGS"
 
 # Checks for libraries.
 AC_CHECK_LIB([pthread], [pthread_create])
+AC_CHECK_LIB([rt], [clock_gettime])
+AC_CHECK_LIB([m], [floor])
 
 export PKG_CONFIG_PATH=/usr/lib/pkgconfig:/usr/lib64/pkgconfig:/lib/pkgconfig:/lib64/pkgconfig:/usr/local/lib/pkgconfig:/usr/local/lib64/pkgconfig
 
@@ -141,7 +150,7 @@ ffmpeg_ivr library path ............... : $libdir
 ffmpeg_ivr include path ............... : $includedir
 ffmpeg_ivr program path ............... : $bindir
 
-
+libcseg library included............. : $libcseg_library
 
 
 

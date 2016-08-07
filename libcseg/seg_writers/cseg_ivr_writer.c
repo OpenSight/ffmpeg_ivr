@@ -56,7 +56,7 @@ static int http_status_to_av_code(int status_code)
 #define  IVR_URI_FIELD_KEY  "uri"
 #define  IVR_ERR_INFO_FIELD_KEY "info"
 
-#define MAX_HTTP_RESULT_SIZE  8192
+#define MAX_HTTP_RESULT_SIZE  4096
 
 #define HTTP_DEFAULT_RETRY_NUM   2
 
@@ -355,7 +355,7 @@ fail:
     }
 
     if(ret){
-        cseg_log(AV_LOG_ERROR,  "[cseg_ivr_writer] HTTP PUT failed(%d)\n", ret);  
+        cseg_log(CSEG_LOG_ERROR,  "[cseg_ivr_writer] HTTP PUT failed(%d)\n", ret);  
         ret = CSEG_ERROR(EIO);
     }
   
@@ -373,7 +373,7 @@ static int create_file(char * ivr_rest_uri,
     //char checksum_b64[32];
     //char checksum_b64_escape[128];
     char post_data_str[256];
-    char * http_response_json = av_malloc(MAX_HTTP_RESULT_SIZE);
+    char * http_response_json = cseg_malloc(MAX_HTTP_RESULT_SIZE);
     cJSON * json_root = NULL;
     cJSON * json_name = NULL;
     cJSON * json_uri = NULL;    
@@ -418,28 +418,30 @@ static int create_file(char * ivr_rest_uri,
         json_root = cJSON_Parse(http_response_json);
         if(json_root== NULL){
             ret = CSEG_ERROR(EPROTO);
-            cseg_log(AV_LOG_ERROR,  "[cseg_ivr_writer] HTTP response Json parse failed(%s)\n", http_response_json);
+            cseg_log(CSEG_LOG_ERROR,  "[cseg_ivr_writer] HTTP response Json parse failed(%s)\n", http_response_json);
             goto failed;
         }
         json_name = cJSON_GetObjectItem(json_root, IVR_NAME_FIELD_KEY);
         if(json_name && json_name->type == cJSON_String && json_name->valuestring){
-            av_strlcpy(filename, json_name->valuestring, filename_size);
+            strncpy(filename, json_name->valuestring, filename_size);
+            filename[filename_size - 1] = 0;
         }
         json_uri = cJSON_GetObjectItem(json_root, IVR_URI_FIELD_KEY);
         if(json_uri && json_uri->type == cJSON_String && json_uri->valuestring){
-            av_strlcpy(file_uri, json_uri->valuestring, file_uri_size);
+            strncpy(file_uri, json_uri->valuestring, file_uri_size);
+            file_uri[file_uri_size - 1] = 0;
         }
     }else{
         ret = http_status_to_av_code(status_code);
         json_root = cJSON_Parse(http_response_json);
         if(json_root== NULL){
-            av_log(NULL, AV_LOG_ERROR,  "[cseg_ivr_writer] HTTP create file status code(%d):%s\n", 
+            cseg_log(CSEG_LOG_ERROR,  "[cseg_ivr_writer] HTTP create file status code(%d):%s\n", 
                    status_code, "reason unknown");
             goto failed;
         }
         json_info = cJSON_GetObjectItem(json_root, IVR_ERR_INFO_FIELD_KEY);
         if(json_info && json_info->type == cJSON_String && json_info->valuestring){            
-            av_log(NULL, AV_LOG_ERROR,  "[cseg_ivr_writer] HTTP create file status code(%d):%s\n", 
+            cseg_log(CSEG_LOG_ERROR,  "[cseg_ivr_writer] HTTP create file status code(%d):%s\n", 
                    status_code, json_info->valuestring);
             goto failed;
         }        
@@ -452,7 +454,7 @@ failed:
         cJSON_Delete(json_root); 
         json_root = NULL;
     }
-    av_free(http_response_json);  
+    cseg_free(http_response_json);  
         
     return ret;
 }
@@ -491,7 +493,7 @@ static int save_file(char * ivr_rest_uri,
     char post_data_str[512];  
     int status_code = 200;
     int ret = 0;
-    char * http_response_json = av_malloc(MAX_HTTP_RESULT_SIZE);
+    char * http_response_json = cseg_malloc(MAX_HTTP_RESULT_SIZE);
     cJSON * json_root = NULL;
     cJSON * json_info = NULL;   
     int response_size = MAX_HTTP_RESULT_SIZE - 1;
@@ -544,7 +546,7 @@ static int save_file(char * ivr_rest_uri,
       
     }
 
-    av_free(http_response_json);
+    cseg_free(http_response_json);
 
     return ret;
 }

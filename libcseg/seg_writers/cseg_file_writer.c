@@ -27,6 +27,8 @@
 #include <pthread.h>
 #include <math.h>
 #include <stdio.h>
+#include <string.h>
+#include <errno.h>
 
 
 
@@ -70,7 +72,8 @@ static int file_write_segment(CachedSegmentContext *cseg, CachedSegment *segment
     if(p){
         p = strrchr(p, '.');
         if (p){
-            av_strlcpy(ext_name, p, 32);
+            strncpy(ext_name, p, 32);
+            ext_name[31] = 0;
             *p = '\0';
         }
     }
@@ -83,7 +86,7 @@ static int file_write_segment(CachedSegmentContext *cseg, CachedSegment *segment
     f = fopen(file_name, "wb");
     if(!f){
         perror("Open File failed");
-        return AVERROR(errno);
+        return CSEG_ERROR(errno);
     }
     
     len = 0;
@@ -94,13 +97,13 @@ static int file_write_segment(CachedSegmentContext *cseg, CachedSegment *segment
         if(cur_frag == NULL){
             fclose(f);
             fprintf(stderr, "segment is invalid");
-            return AVERROR(EFAULT);
+            return CSEG_ERROR(EFAULT);
         }
         ret = fwrite(cur_frag->buffer, 1, to_write, f);
         if(ret != to_write){
             fclose(f);
             perror("fwrite error(%s)");
-            return AVERROR(errno);
+            return CSEG_ERROR(errno);
         }
         
         len += to_write;
