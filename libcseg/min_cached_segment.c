@@ -219,13 +219,13 @@ int write_segment(void *opaque, const uint8_t *buf, size_t buf_size)
             ret = -1;
             return ret;
         }
-        memset(segment->tail, 0, FRAGMENT_SIZE);
+        segment->head->next = NULL;
     }
     
     while(need_write){
         int tail_pos = segment->size % FRAGMENT_BUF_SIZE;
         int left_space = FRAGMENT_BUF_SIZE - tail_pos;
-        int copy_size = (left_space > need_write)?need_write:left_space;
+        int copy_size = MIN(need_write, left_space);
         memcpy(segment->tail->buffer + tail_pos, buf, copy_size);
         buf += copy_size;
         segment->size += copy_size;
@@ -233,18 +233,23 @@ int write_segment(void *opaque, const uint8_t *buf, size_t buf_size)
         left_space -= copy_size;
         
         if(left_space == 0){
-            //need a new fragment and append to the list
-            segment->tail->next = (fragment *)cseg_malloc(FRAGMENT_SIZE);
             if(segment->tail->next == NULL){
-                //error log
-                ret = -1;
-                return ret;
+                //need a new fragment and append to the list
+                fragment * new_fragment = (fragment *)cseg_malloc(FRAGMENT_SIZE);                
+                if(new_fragment == NULL){
+                    //error log
+                    ret = -1;
+                    return ret;
+                }
+                new_fragment->next = NULL;
+                segment->tail->next = new_fragment;
+             
             }
+            
             segment->tail = segment->tail->next; // move tail pointer to the new tail    
-            memset(segment->tail, 0, FRAGMENT_SIZE);
-        }//if(left_space == 0){
+        }//if(left_space == 0)
         
-    }//if(left_space == 0){
+    }//while(need_write)
     
     return ret;
 } 
@@ -544,6 +549,24 @@ static int cseg_start(CachedSegmentContext *cseg)
     return 0;
 }
 
+int libcseg_init(void)
+{
+#define REGISTER_CSEG_WRITER(x)                                            \
+    {                                                                   \
+        extern CachedSegmentWriter cseg_##x##_writer;                           \
+        register_segment_writer(&cseg_##x##_writer);                 \
+    }
+    
+    static int initialized = 0;
+
+    if (initialized)
+        return;
+    initialized = 1;
+    
+    REGISTER_CSEG_WRITER(file);
+    REGISTER_CSEG_WRITER(dummy);
+    REGISTER_CSEG_WRITER(ivr);      
+}
 
 
 int init_cseg_muxer(char * filename,
@@ -899,5 +922,16 @@ void release_cseg_muxer(CachedSegmentContext *cseg)
     pthread_mutex_destroy(&cseg->mutex); 
     
     cseg_free(cseg);
+
+}
+
+
+void * get_cseg_muxer_private(CachedSegmentContext *cseg)
+{
+    if(cseg == NULL){
+        return NULL;
+    }else{
+        return cseg->private_data;
+    }
 
 }

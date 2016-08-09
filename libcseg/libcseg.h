@@ -65,12 +65,27 @@ typedef struct {
     int av_stream_index;
     uint8_t   flags;  // flag: bit8 for is_sync
     int64_t  pts;   // in 90khz
-    int64_t  dts;   // -1 if not present
+    int64_t  dts;   // in 90khz, -1 if not present
     uint8_t* data;  // for h264, NALU starts with 0x00000001
     size_t  size;
 }av_packet_t;
 
 typedef struct CachedSegmentContext CachedSegmentContext;
+
+
+
+/**
+ * init the libcseg globally
+ *
+ * Before using the other functions of libcseg, this function
+ * must be invoked. It would register all supported writers and 
+ * allocate other necessary resource for libcseg
+ *
+ * 
+ * @return 0 on success, a negative number on error. 
+ *
+ */
+int libcseg_init(void);
 
 
 /**
@@ -91,7 +106,7 @@ typedef struct CachedSegmentContext CachedSegmentContext;
  * @param start_ts  the start timestamp (in seconds, from epoch) of the first segment
  *                  when it is given 0 or negative, this context would tate the 
  *                  system current time as it.
- * @param io_timeout  the timeout time (in seconds) for writer IO
+ * @param io_timeout  the timeout time (in milli-seconds) for writer IO
  * @param private_data the user private data
  * @param cseg  the output cseg muxer context
  * 
@@ -120,7 +135,6 @@ int init_cseg_muxer(char * filename,
  *
  * @param cseg the cseg muxer  to write
  * @param pkt  the packet to write the cseg muxer
-
  * 
  * @return 0 on success, a negative number on error. 
  *
@@ -143,6 +157,20 @@ int cseg_write_packet(CachedSegmentContext *cseg, av_packet_t *pkt);
  */
 void release_cseg_muxer(CachedSegmentContext *cseg);
 
+
+
+/**
+ * get the private data in cseg muxer context
+ *
+ * the private data is set when init_cseg_muxer() is invoked
+ *
+ * @param cseg the cseg muxer to release
+ * 
+ * 
+ * @return the private data
+ *
+ */
+void * get_cseg_muxer_private(CachedSegmentContext *cseg);
 
 #ifdef __cplusplus
 }

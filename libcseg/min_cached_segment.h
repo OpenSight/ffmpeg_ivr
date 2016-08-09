@@ -205,7 +205,7 @@ struct CachedSegmentContext {
     //writer pthread exit code
     volatile int consumer_exit_code;
     
-    // writer IO timeout (in sec)
+    // writer IO timeout (in milli-sec)
     int32_t io_timeout;  
   
 //#define CONSUMER_ERR_STR_LEN 1024

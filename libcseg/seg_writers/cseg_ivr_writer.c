@@ -34,6 +34,12 @@
 #include "../utils/http_client/HTTPClient.h"
 
 
+#define   MSEC_PER_SEC   1000
+
+#define MSEC_TO_SEC(ms)   ((((int32_t)(ms)) + MSEC_PER_SEC - 1) / MSEC_PER_SEC)
+
+
+
 static int http_status_to_av_code(int status_code)
 {
   
@@ -80,7 +86,7 @@ static inline int http_need_retry(int ret)
 }
 
 static int http_post(char * http_uri, 
-                     int32_t io_timeout,  //in seconds 
+                     int32_t io_timeout,  //in milli-seconds 
                      char * post_content_type, 
                      char * post_data, int post_len,
                      int32_t  retries,
@@ -128,7 +134,7 @@ static int http_post(char * http_uri,
         }      
 
         if((ret = HTTPClientSendRequest(pHTTP, http_uri, post_data,
-                    post_len,TRUE, io_timeout, 0)) != HTTP_CLIENT_SUCCESS)
+                    post_len,TRUE, MSEC_TO_SEC(io_timeout), 0)) != HTTP_CLIENT_SUCCESS)
         {
             if(http_need_retry(ret)){
                 //cleanup the current HTTP client session hanle
@@ -143,7 +149,7 @@ static int http_post(char * http_uri,
     
 
         // Retrieve the the headers and analyze them
-        if((ret = HTTPClientRecvResponse(pHTTP,io_timeout)) != HTTP_CLIENT_SUCCESS)
+        if((ret = HTTPClientRecvResponse(pHTTP,MSEC_TO_SEC(io_timeout))) != HTTP_CLIENT_SUCCESS)
         {
             if(http_need_retry(ret)){//check if need retry
                 //cleanup the current HTTP client session hanle
@@ -177,7 +183,7 @@ static int http_post(char * http_uri,
                 nSize = (*buf_size) - nTotal;   
 
                 // Get the data
-                ret = HTTPClientReadData(pHTTP,result_buf+nTotal,nSize,io_timeout,&nSize);
+                ret = HTTPClientReadData(pHTTP,result_buf+nTotal,nSize, MSEC_TO_SEC(io_timeout), &nSize);
                 nTotal += nSize;
                 if(ret == HTTP_CLIENT_EOS){
                     ret = HTTP_CLIENT_SUCCESS;
@@ -223,7 +229,7 @@ fail:
 }
 
 static int http_put(char * http_uri, 
-                    int32_t io_timeout,  //in seconds 
+                    int32_t io_timeout,  //in milli-seconds 
                     char * content_type, 
                     CachedSegment * segment,
                     int32_t  retries,
@@ -282,7 +288,7 @@ static int http_put(char * http_uri,
         
 
         if((ret = HTTPClientSendRequest(pHTTP, http_uri, NULL,
-                    0, FALSE, io_timeout, 0)) != HTTP_CLIENT_SUCCESS)
+                    0, FALSE, MSEC_TO_SEC(io_timeout), 0)) != HTTP_CLIENT_SUCCESS)
         {
             if(http_need_retry(ret)){
                 //cleanup the current HTTP client session hanle
@@ -304,9 +310,10 @@ static int http_put(char * http_uri,
             if(cur_frag == NULL){
                 fprintf(stderr, "segment is invalid");
                 ret = HTTP_CLIENT_ERROR_INVALID_HANDLE;
+                break;
             }
             
-            ret  = HTTPClientWriteData(pHTTP, cur_frag->buffer, to_write, io_timeout);
+            ret  = HTTPClientWriteData(pHTTP, cur_frag->buffer, to_write, MSEC_TO_SEC(io_timeout));
             if(ret != HTTP_CLIENT_SUCCESS){
                 break;
             }
@@ -369,9 +376,6 @@ static int create_file(char * ivr_rest_uri,
                        char * filename, int filename_size,
                        char * file_uri, int file_uri_size)
 {
-    //uint8_t checksum[16];
-    //char checksum_b64[32];
-    //char checksum_b64_escape[128];
     char post_data_str[256];
     char * http_response_json = cseg_malloc(MAX_HTTP_RESULT_SIZE);
     cJSON * json_root = NULL;
@@ -392,9 +396,6 @@ static int create_file(char * ivr_rest_uri,
     memset(http_response_json, 0, MAX_HTTP_RESULT_SIZE);
     
     //prepare post_data
-    //av_md5_sum(checksum, segment->buffer, segment->size);
-    //av_base64_encode(checksum_b64, 32, checksum, 16);
-    //url_encode(checksum_b64_escape, checksum_b64);
     sprintf(post_data_str, 
             "op=create&content_type=video%%2Fmp2t&size=%d&start=%.6f&duration=%.6f",
             segment->size,
@@ -403,7 +404,7 @@ static int create_file(char * ivr_rest_uri,
         
     //issue HTTP request
     ret = http_post(ivr_rest_uri, 
-                    io_timeout,
+                    io_timeout,  //in milli-seconds
                     NULL, 
                     post_data_str, strlen(post_data_str), 
                     HTTP_DEFAULT_RETRY_NUM, 
@@ -433,20 +434,22 @@ static int create_file(char * ivr_rest_uri,
         }
     }else{
         ret = http_status_to_av_code(status_code);
-        json_root = cJSON_Parse(http_response_json);
-        if(json_root== NULL){
-            cseg_log(CSEG_LOG_ERROR,  "[cseg_ivr_writer] HTTP create file status code(%d):%s\n", 
-                   status_code, "reason unknown");
-            goto failed;
+        if(response_size != 0){
+            json_root = cJSON_Parse(http_response_json);
+            if(json_root== NULL){
+                cseg_log(CSEG_LOG_ERROR,  "[cseg_ivr_writer] HTTP create file status code(%d):%s\n", 
+                       status_code, "reason unknown");
+            }else{
+                json_info = cJSON_GetObjectItem(json_root, IVR_ERR_INFO_FIELD_KEY);
+                if(json_info && json_info->type == cJSON_String && json_info->valuestring){            
+                    cseg_log(CSEG_LOG_ERROR,  "[cseg_ivr_writer] HTTP create file status code(%d):%s\n", 
+                           status_code, json_info->valuestring);
+                }        
+            }//if(json_root== NULL)
         }
-        json_info = cJSON_GetObjectItem(json_root, IVR_ERR_INFO_FIELD_KEY);
-        if(json_info && json_info->type == cJSON_String && json_info->valuestring){            
-            cseg_log(CSEG_LOG_ERROR,  "[cseg_ivr_writer] HTTP create file status code(%d):%s\n", 
-                   status_code, json_info->valuestring);
-            goto failed;
-        }        
+        goto failed;
         
-    }
+    }//if(status_code >= 200 && status_code < 300){
     
 
 failed:
@@ -460,7 +463,7 @@ failed:
 }
 
 static int upload_file(CachedSegment *segment, 
-                       int32_t io_timeout, 
+                       int32_t io_timeout,  //in milli-seconds
                        char * file_uri)
 {
     int status_code = 200;
@@ -485,7 +488,7 @@ fail:
 }
 
 static int save_file(char * ivr_rest_uri,
-                      int32_t io_timeout,
+                      int32_t io_timeout,  //in milli-seconds
                       CachedSegment *segment, 
                       char * filename,
                       int success)
@@ -524,31 +527,40 @@ static int save_file(char * ivr_rest_uri,
                     &status_code,
                     http_response_json, &response_size); 
     if(ret < 0){
-        return ret;
+        goto failed;
     }
 
     if(status_code < 200 || status_code >= 300){
 
         ret = http_status_to_av_code(status_code);
-        
-        json_root = cJSON_Parse(http_response_json);
-        if(json_root== NULL){
-            cseg_log(CSEG_LOG_ERROR,  "[cseg_ivr_writer] HTTP create file status code(%d):%s\n", 
-                   status_code, "reason unknown");       
-        }else{
-            json_info = cJSON_GetObjectItem(json_root, IVR_ERR_INFO_FIELD_KEY);
-            if(json_info && json_info->type == cJSON_String && json_info->valuestring){
+        if(response_size != 0){
+            json_root = cJSON_Parse(http_response_json);
+            if(json_root== NULL){
                 cseg_log(CSEG_LOG_ERROR,  "[cseg_ivr_writer] HTTP create file status code(%d):%s\n", 
-                   status_code, json_info->valuestring);
-            }        
-            cJSON_Delete(json_root);             
-        }
+                       status_code, "reason unknown");   
+            }else{
+                json_info = cJSON_GetObjectItem(json_root, IVR_ERR_INFO_FIELD_KEY);
+                if(json_info && json_info->type == cJSON_String && json_info->valuestring){
+                    cseg_log(CSEG_LOG_ERROR,  "[cseg_ivr_writer] HTTP create file status code(%d):%s\n", 
+                       status_code, json_info->valuestring);
+                }                 
+            }//if(json_root== NULL)
+        }//if(response_size != 0)
+        
+        goto failed;
       
     }
 
-    cseg_free(http_response_json);
 
+failed:
+    if(json_root){
+        cJSON_Delete(json_root); 
+        json_root = NULL;
+    }
+    cseg_free(http_response_json);  
+        
     return ret;
+
 }
 
 

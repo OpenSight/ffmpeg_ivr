@@ -443,18 +443,22 @@ static int create_file(char * ivr_rest_uri,
             av_strlcpy(file_uri, json_uri->valuestring, file_uri_size);
         }
     }else{
+
         ret = http_status_to_av_code(status_code);
-        json_root = cJSON_Parse(http_response_json);
-        if(json_root== NULL){
-            av_log(NULL, AV_LOG_ERROR,  "[cseg_ivr_writer] HTTP response Json parse failed(%s)\n", http_response_json);   
-            goto failed;
-        }
-        json_info = cJSON_GetObjectItem(json_root, IVR_ERR_INFO_FIELD_KEY);
-        if(json_info && json_info->type == cJSON_String && json_info->valuestring){            
-            av_log(NULL, AV_LOG_ERROR,  "[cseg_ivr_writer] HTTP create file status code(%d):%s\n", 
-                   status_code, json_info->valuestring);
-            goto failed;
-        }        
+        if(response_size != 0){
+            json_root = cJSON_Parse(http_response_json);
+            if(json_root== NULL){
+                av_log(NULL, AV_LOG_ERROR,  "[cseg_ivr_writer] HTTP response Json parse failed(%s)\n", http_response_json);   
+            }else{
+                json_info = cJSON_GetObjectItem(json_root, IVR_ERR_INFO_FIELD_KEY);
+                if(json_info && json_info->type == cJSON_String && json_info->valuestring){            
+                    av_log(NULL, AV_LOG_ERROR,  "[cseg_ivr_writer] HTTP create file status code(%d):%s\n", 
+                           status_code, json_info->valuestring);
+                }        
+            }//if(json_root== NULL)
+            
+        }//if(response_size != 0)
+        goto failed;
         
     }
     
@@ -533,7 +537,7 @@ static int save_file(char * ivr_rest_uri,
                     &status_code,
                     http_response_json, &response_size); 
     if(ret){
-        return ret;
+        goto failed;
     }
 
 
@@ -541,25 +545,33 @@ static int save_file(char * ivr_rest_uri,
     if(status_code < 200 || status_code >= 300){
 
         ret = http_status_to_av_code(status_code);
-        
-        json_root = cJSON_Parse(http_response_json);
-        if(json_root== NULL){
-            av_log(NULL, AV_LOG_ERROR,  "[cseg_ivr_writer] HTTP response Json parse failed(%s)\n", http_response_json);       
-        }else{
-            json_info = cJSON_GetObjectItem(json_root, IVR_ERR_INFO_FIELD_KEY);
-            if(json_info && json_info->type == cJSON_String && json_info->valuestring){
-                av_log(NULL, AV_LOG_ERROR,  "[cseg_ivr_writer] HTTP create file status code(%d):%s\n", 
-                   status_code, json_info->valuestring);
-            }        
-            cJSON_Delete(json_root);             
+        if(response_size != 0){
+            json_root = cJSON_Parse(http_response_json);
+            if(json_root== NULL){
+                av_log(NULL, AV_LOG_ERROR,  "[cseg_ivr_writer] HTTP response Json parse failed(%s)\n", http_response_json);       
+            }else{
+                json_info = cJSON_GetObjectItem(json_root, IVR_ERR_INFO_FIELD_KEY);
+                if(json_info && json_info->type == cJSON_String && json_info->valuestring){
+                    av_log(NULL, AV_LOG_ERROR,  "[cseg_ivr_writer] HTTP create file status code(%d):%s\n", 
+                       status_code, json_info->valuestring);
+                }        
+            }
         }
+        
+        goto failed;
       
     }
 
-    av_free(http_response_json);
-
+failed:
+    if(json_root){
+        cJSON_Delete(json_root); 
+        json_root = NULL;
+    }
+    av_free(http_response_json);  
+        
     return ret;
 }
+
 
 
 
