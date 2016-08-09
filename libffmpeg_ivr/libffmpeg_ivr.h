@@ -21,7 +21,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
 **/
 
-
+#ifndef LIBFFMPEG_IVR_H
+#define LIBFFMPEG_IVR_H
 
 #include <float.h>
 #include <stdint.h>
@@ -38,4 +39,6 @@ void ffmpeg_ivr_register(void);
 
 #ifdef __cplusplus
 }
+#endif
+
 #endif

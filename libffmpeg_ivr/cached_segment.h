@@ -19,7 +19,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
 **/
 
-
+#ifndef CACHED_SEGMENT_H
+#define CACHED_SEGMENT_H
 
 #include <float.h>
 #include <stdint.h>
@@ -160,4 +161,6 @@ void register_cseg(void);
 
 #ifdef __cplusplus
 }
+#endif
+
 #endif

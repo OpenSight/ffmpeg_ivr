@@ -41,7 +41,7 @@
 
 void ffmpeg_ivr_register(void)
 {
-    static int initialized;
+    static int initialized = 0;
 
     if (initialized)
         return;
