@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <libavutil/log.h>
 #include "ts_muxer.h"
+#include "libcseg.h"
 
 
 // TS payload type
@@ -922,8 +923,9 @@ int ts_muxer_write_header(ts_muxer_t* ts_muxer) {
                 ts_muxer->program.audio_stream.pid = 0x1001;
                 ts_muxer->program.audio_stream.stream_codec = av_stream->codec;
                 ts_muxer->program.audio_stream.stream_type = TS_MUXER_STREAM_TYPE_AAC;
+                ts_muxer->program.audio_stream.object_type_indication = 0x40;
                 // https://wiki.multimedia.cx/index.php?title=MPEG-4_Audio#Audio_Object_Types
-                ts_muxer->program.audio_stream.aac_audio_object_type = 1; // AAC main
+                ts_muxer->program.audio_stream.aac_audio_object_type = av_stream->audio_object_type;
                 ts_muxer->program.audio_stream.aac_channel_config = av_stream->audio_channel_count;
                 for (i = 0; ts_muxer_aac_sample_frequencies[i] != 0 && ts_muxer_aac_sample_frequencies[i] != av_stream->audio_sample_rate; i++) {
                 }

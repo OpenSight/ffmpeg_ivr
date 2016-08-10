@@ -42,6 +42,7 @@ typedef enum {
 typedef struct {
     av_stream_type_t type;
     av_stream_codec_t codec;
+    uint8_t  audio_object_type;
     uint32_t audio_sample_rate;
     uint8_t  audio_channel_count;  // https://wiki.multimedia.cx/index.php?title=MPEG-4_Audio#Channel_Configurations
 }av_stream_t;
