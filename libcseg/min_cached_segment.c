@@ -615,6 +615,7 @@ int init_cseg_muxer(const char * filename,
     if(new_cseg == NULL){
         return CSEG_ERROR(ENOMEM);
     }
+    memset(new_cseg, 0, sizeof(CachedSegmentContext));
     
     pthread_mutex_init(&new_cseg->mutex, NULL);
     pthread_cond_init(&new_cseg->not_empty, NULL);

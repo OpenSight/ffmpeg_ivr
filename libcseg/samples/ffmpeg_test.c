@@ -115,7 +115,12 @@ static  int init_stream_info(void)
             break;
         }   
     }//for(int i=0; i<fmt_ctx_->nb_streams; i++) {  
-
+/*
+    for(i=0; i<stream_count; i++) {  
+        fprintf(stderr, "index:%d, type:%d, codec:%d\n", 
+                i, (int)stream_infos[i].type, (int)stream_infos[i].codec);
+    }      
+*/    
     return 0;
         
 failed:
@@ -213,6 +218,8 @@ int main (int argc, char **argv)
     /* register all formats and codecs */
     av_register_all();
     avformat_network_init();
+    
+    av_log_set_level(AV_LOG_DEBUG);
 
     libcseg_init();
 
@@ -246,6 +253,7 @@ int main (int argc, char **argv)
     av_dump_format(fmt_ctx, 0, src_filename, 0);
 
     /* init the stream info config */
+
     if(init_stream_info()){
         fprintf(stderr, "Init stream info failed\n");
         exit(1);        
@@ -266,7 +274,7 @@ int main (int argc, char **argv)
         fprintf(stderr, "Init cseg muxer failed: %d\n", ret);
         exit(1);                                   
     }
-    
+  
 
     fprintf(stderr, "Start writing packets to %s\n", dst_url);
 
@@ -278,16 +286,21 @@ int main (int argc, char **argv)
     
     ret = 0;
     while(!should_shutdown){
-        if((ret = av_read_frame(fmt_ctx, &pkt)) < 0){
+        ret = av_read_frame(fmt_ctx, &pkt);
+        if (ret == AVERROR(EAGAIN)) {
+            av_usleep(10000);
+            continue;
+        }        
+        if(ret < 0){
             fprintf(stderr, "Read frame failed(%d): %s\n", ret, av_err2str(ret));
             break;
         }
-        
+       
         if((ret = write_packet(&pkt))< 0){
             fprintf(stderr, "failed to write frame to cseg context (%d): %s\n", ret, strerror(-ret));
             break;      
         }       
-        
+       
         av_free_packet(&pkt);
     }
     

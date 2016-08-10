@@ -896,10 +896,11 @@ int ts_muxer_set_avio_context(ts_muxer_t* ts_muxer, void* avio_context, avio_wri
 int ts_muxer_write_header(ts_muxer_t* ts_muxer) {
 
     av_stream_t* av_stream;
-    int i;
+    int i, j;
 
     if (NULL == ts_muxer || NULL == ts_muxer->av_streams || 0 == ts_muxer->av_stream_count) {
         return -1;
+        
     }
 
     if (NULL == ts_muxer->avio_context || NULL == ts_muxer->avio_write) {
@@ -909,6 +910,10 @@ int ts_muxer_write_header(ts_muxer_t* ts_muxer) {
     // find first video and audio stream
     for (i=0; i<ts_muxer->av_stream_count; i++) {
         av_stream = &ts_muxer->av_streams[i];
+/*        
+        fprintf(stderr, "av_stream->type:%d, av_stream->codec:%d, test--------------------------\n", 
+                (int)av_stream->type, (int)av_stream->codec);            
+*/
         if (AV_STREAM_TYPE_VIDEO == av_stream->type && AV_STREAM_CODEC_H264 == av_stream->codec) {
             // found H264 stream
             if (0 == ts_muxer->program.video_stream.pid) {
@@ -930,13 +935,13 @@ int ts_muxer_write_header(ts_muxer_t* ts_muxer) {
                 // https://wiki.multimedia.cx/index.php?title=MPEG-4_Audio#Audio_Object_Types
                 ts_muxer->program.audio_stream.aac_audio_object_type = av_stream->audio_object_type;
                 ts_muxer->program.audio_stream.aac_channel_config = av_stream->audio_channel_count;
-                for (i = 0; ts_muxer_aac_sample_frequencies[i] != 0 && ts_muxer_aac_sample_frequencies[i] != av_stream->audio_sample_rate; i++) {
+                for (j = 0; ts_muxer_aac_sample_frequencies[j] != 0 && ts_muxer_aac_sample_frequencies[j] != av_stream->audio_sample_rate; j++) {
                 }
-                if (ts_muxer_aac_sample_frequencies[i] == 0) {
+                if (ts_muxer_aac_sample_frequencies[j] == 0) {
                     cseg_log(CSEG_LOG_ERROR, "Invalid audio sample frequency %d", av_stream->audio_sample_rate);
                     return -1;
                 }
-                ts_muxer->program.audio_stream.aac_sampling_frequency_index = i;
+                ts_muxer->program.audio_stream.aac_sampling_frequency_index = j;
             }
         }
     }
@@ -997,7 +1002,10 @@ int ts_muxer_write_packet(ts_muxer_t* ts_muxer, av_packet_t* av_packet) {
                && ts_muxer->program.audio_stream.stream_index == av_packet->av_stream_index) {
         return ts_muxer_enc_aac_packet(ts_muxer, &ts_muxer->program.audio_stream, av_packet);
     } else {
-        cseg_log(CSEG_LOG_ERROR, "Unprepared stream type %d stream codec %d", av_stream->type, av_stream->codec);
+        cseg_log(CSEG_LOG_ERROR, "Unprepared stream type %d stream codec %d\n", av_stream->type, av_stream->codec);
+        cseg_log(CSEG_LOG_ERROR, "program.video_stream.stream_type:%d, program.video_stream.stream_index: %d\n", 
+                ts_muxer->program.video_stream.stream_type, 
+                ts_muxer->program.video_stream.stream_index);
         return -1;
     }
 }
