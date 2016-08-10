@@ -569,7 +569,7 @@ int libcseg_init(void)
 }
 
 
-int init_cseg_muxer(char * filename,
+int init_cseg_muxer(const char * filename,
                     av_stream_t* streams, uint8_t stream_count,
                     uint64_t start_sequence, 
                     double segment_time,

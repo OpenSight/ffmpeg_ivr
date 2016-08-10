@@ -2,6 +2,9 @@
 #include <string.h>
 #include <stdlib.h>
 #include <libavutil/log.h>
+
+#include "config.h"
+
 #include "ts_muxer.h"
 #include "libcseg.h"
 
@@ -852,7 +855,7 @@ ts_muxer_t* new_ts_muxer(av_stream_t* av_streams, int stream_count) {
 
     ts_muxer_init_crc32_table();
 
-    ts_muxer = malloc(sizeof(struct _ts_muxer));
+    ts_muxer = cseg_malloc(sizeof(struct _ts_muxer));
     if (ts_muxer == NULL) {
         cseg_log(CSEG_LOG_ERROR, "Failed to malloc ts_muxer");
         return NULL;
@@ -872,7 +875,7 @@ void free_ts_muxer(ts_muxer_t* ts_muxer) {
         return;
     }
 
-    free(ts_muxer);
+    cseg_free(ts_muxer);
 }
 
 

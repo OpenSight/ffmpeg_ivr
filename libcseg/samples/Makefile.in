@@ -34,7 +34,7 @@ PRE_UNINSTALL = :
 POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
-noinst_PROGRAMS = HTTPClientSample$(EXEEXT)
+noinst_PROGRAMS = HTTPClientSample$(EXEEXT) ffmpeg_test$(EXEEXT)
 subdir = libcseg/samples
 DIST_COMMON = $(srcdir)/Makefile.am $(srcdir)/Makefile.in
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
@@ -55,6 +55,14 @@ HTTPClientSample_DEPENDENCIES = $(builddir)/../libcseg.la
 AM_V_lt = $(am__v_lt_$(V))
 am__v_lt_ = $(am__v_lt_$(AM_DEFAULT_VERBOSITY))
 am__v_lt_0 = --silent
+am__dirstamp = $(am__leading_dot)dirstamp
+am_ffmpeg_test_OBJECTS = ffmpeg_test-ffmpeg_test.$(OBJEXT) \
+	auxiliary/ffmpeg_test-mpeg4audio.$(OBJEXT)
+ffmpeg_test_OBJECTS = $(am_ffmpeg_test_OBJECTS)
+ffmpeg_test_DEPENDENCIES = $(builddir)/../libcseg.la
+ffmpeg_test_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
+	$(LIBTOOLFLAGS) --mode=link $(CCLD) $(ffmpeg_test_CFLAGS) \
+	$(CFLAGS) $(ffmpeg_test_LDFLAGS) $(LDFLAGS) -o $@
 DEFAULT_INCLUDES = -I.@am__isrc@ -I$(top_builddir)
 depcomp = $(SHELL) $(top_srcdir)/config/depcomp
 am__depfiles_maybe = depfiles
@@ -81,8 +89,8 @@ am__v_CCLD_0 = @echo "  CCLD  " $@;
 AM_V_GEN = $(am__v_GEN_$(V))
 am__v_GEN_ = $(am__v_GEN_$(AM_DEFAULT_VERBOSITY))
 am__v_GEN_0 = @echo "  GEN   " $@;
-SOURCES = $(HTTPClientSample_SOURCES)
-DIST_SOURCES = $(HTTPClientSample_SOURCES)
+SOURCES = $(HTTPClientSample_SOURCES) $(ffmpeg_test_SOURCES)
+DIST_SOURCES = $(HTTPClientSample_SOURCES) $(ffmpeg_test_SOURCES)
 ETAGS = etags
 CTAGS = ctags
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
@@ -221,11 +229,25 @@ top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 AUTOMAKE_OPTIONS = foreign subdir-objects
-AM_CPPFLAGS = -I$(srcdir)/../ -I$(srcdir)/../utils/http_client
+AM_CPPFLAGS = -I$(srcdir)/../ -I$(srcdir)/../utils/http_client -I$(srcdir)
 HTTPClientSample_SOURCES = HTTPClientSample.h \
     HTTPClientSample.c
 
 HTTPClientSample_LDADD = $(builddir)/../libcseg.la
+ffmpeg_test_SOURCES = ffmpeg_test.c  \
+    auxiliary/get_bits.h \
+    auxiliary/mpeg4audio.h  \
+    auxiliary/mpeg4audio.c
+
+ffmpeg_test_LDADD = $(builddir)/../libcseg.la    
+ffmpeg_test_CFLAGS = $(libavformat_CFLAGS) $(libavutil_CFLAGS) \
+    $(libavcodec_CFLAGS) $(libavfilter_CFLAGS) $(libswscale_CFLAGS) $(libswresample_CFLAGS)  \
+    $(libavdevice_CFLAGS)
+
+ffmpeg_test_LDFLAGS = $(libavformat_LIBS) $(libavutil_LIBS) \
+    $(libavcodec_LIBS) $(libavfilter_LIBS) $(libswscale_LIBS) $(libswresample_LIBS) \
+    $(libavdevice_LIBS)
+
 all: all-am
 
 .SUFFIXES:
@@ -272,14 +294,28 @@ clean-noinstPROGRAMS:
 HTTPClientSample$(EXEEXT): $(HTTPClientSample_OBJECTS) $(HTTPClientSample_DEPENDENCIES) 
 	@rm -f HTTPClientSample$(EXEEXT)
 	$(AM_V_CCLD)$(LINK) $(HTTPClientSample_OBJECTS) $(HTTPClientSample_LDADD) $(LIBS)
+auxiliary/$(am__dirstamp):
+	@$(MKDIR_P) auxiliary
+	@: > auxiliary/$(am__dirstamp)
+auxiliary/$(DEPDIR)/$(am__dirstamp):
+	@$(MKDIR_P) auxiliary/$(DEPDIR)
+	@: > auxiliary/$(DEPDIR)/$(am__dirstamp)
+auxiliary/ffmpeg_test-mpeg4audio.$(OBJEXT): auxiliary/$(am__dirstamp) \
+	auxiliary/$(DEPDIR)/$(am__dirstamp)
+ffmpeg_test$(EXEEXT): $(ffmpeg_test_OBJECTS) $(ffmpeg_test_DEPENDENCIES) 
+	@rm -f ffmpeg_test$(EXEEXT)
+	$(AM_V_CCLD)$(ffmpeg_test_LINK) $(ffmpeg_test_OBJECTS) $(ffmpeg_test_LDADD) $(LIBS)
 
 mostlyclean-compile:
 	-rm -f *.$(OBJEXT)
+	-rm -f auxiliary/ffmpeg_test-mpeg4audio.$(OBJEXT)
 
 distclean-compile:
 	-rm -f *.tab.c
 
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/HTTPClientSample.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ffmpeg_test-ffmpeg_test.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@auxiliary/$(DEPDIR)/ffmpeg_test-mpeg4audio.Po@am__quote@
 
 .c.o:
 @am__fastdepCC_TRUE@	$(AM_V_CC)depbase=`echo $@ | sed 's|[^/]*$$|$(DEPDIR)/&|;s|\.o$$||'`;\
@@ -307,6 +343,38 @@ distclean-compile:
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	source='$<' object='$@' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(LTCOMPILE) -c -o $@ $<
+
+ffmpeg_test-ffmpeg_test.o: ffmpeg_test.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(ffmpeg_test_CFLAGS) $(CFLAGS) -MT ffmpeg_test-ffmpeg_test.o -MD -MP -MF $(DEPDIR)/ffmpeg_test-ffmpeg_test.Tpo -c -o ffmpeg_test-ffmpeg_test.o `test -f 'ffmpeg_test.c' || echo '$(srcdir)/'`ffmpeg_test.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/ffmpeg_test-ffmpeg_test.Tpo $(DEPDIR)/ffmpeg_test-ffmpeg_test.Po
+@am__fastdepCC_FALSE@	$(AM_V_CC) @AM_BACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='ffmpeg_test.c' object='ffmpeg_test-ffmpeg_test.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(ffmpeg_test_CFLAGS) $(CFLAGS) -c -o ffmpeg_test-ffmpeg_test.o `test -f 'ffmpeg_test.c' || echo '$(srcdir)/'`ffmpeg_test.c
+
+ffmpeg_test-ffmpeg_test.obj: ffmpeg_test.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(ffmpeg_test_CFLAGS) $(CFLAGS) -MT ffmpeg_test-ffmpeg_test.obj -MD -MP -MF $(DEPDIR)/ffmpeg_test-ffmpeg_test.Tpo -c -o ffmpeg_test-ffmpeg_test.obj `if test -f 'ffmpeg_test.c'; then $(CYGPATH_W) 'ffmpeg_test.c'; else $(CYGPATH_W) '$(srcdir)/ffmpeg_test.c'; fi`
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/ffmpeg_test-ffmpeg_test.Tpo $(DEPDIR)/ffmpeg_test-ffmpeg_test.Po
+@am__fastdepCC_FALSE@	$(AM_V_CC) @AM_BACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='ffmpeg_test.c' object='ffmpeg_test-ffmpeg_test.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(ffmpeg_test_CFLAGS) $(CFLAGS) -c -o ffmpeg_test-ffmpeg_test.obj `if test -f 'ffmpeg_test.c'; then $(CYGPATH_W) 'ffmpeg_test.c'; else $(CYGPATH_W) '$(srcdir)/ffmpeg_test.c'; fi`
+
+auxiliary/ffmpeg_test-mpeg4audio.o: auxiliary/mpeg4audio.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(ffmpeg_test_CFLAGS) $(CFLAGS) -MT auxiliary/ffmpeg_test-mpeg4audio.o -MD -MP -MF auxiliary/$(DEPDIR)/ffmpeg_test-mpeg4audio.Tpo -c -o auxiliary/ffmpeg_test-mpeg4audio.o `test -f 'auxiliary/mpeg4audio.c' || echo '$(srcdir)/'`auxiliary/mpeg4audio.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) auxiliary/$(DEPDIR)/ffmpeg_test-mpeg4audio.Tpo auxiliary/$(DEPDIR)/ffmpeg_test-mpeg4audio.Po
+@am__fastdepCC_FALSE@	$(AM_V_CC) @AM_BACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='auxiliary/mpeg4audio.c' object='auxiliary/ffmpeg_test-mpeg4audio.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(ffmpeg_test_CFLAGS) $(CFLAGS) -c -o auxiliary/ffmpeg_test-mpeg4audio.o `test -f 'auxiliary/mpeg4audio.c' || echo '$(srcdir)/'`auxiliary/mpeg4audio.c
+
+auxiliary/ffmpeg_test-mpeg4audio.obj: auxiliary/mpeg4audio.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(ffmpeg_test_CFLAGS) $(CFLAGS) -MT auxiliary/ffmpeg_test-mpeg4audio.obj -MD -MP -MF auxiliary/$(DEPDIR)/ffmpeg_test-mpeg4audio.Tpo -c -o auxiliary/ffmpeg_test-mpeg4audio.obj `if test -f 'auxiliary/mpeg4audio.c'; then $(CYGPATH_W) 'auxiliary/mpeg4audio.c'; else $(CYGPATH_W) '$(srcdir)/auxiliary/mpeg4audio.c'; fi`
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) auxiliary/$(DEPDIR)/ffmpeg_test-mpeg4audio.Tpo auxiliary/$(DEPDIR)/ffmpeg_test-mpeg4audio.Po
+@am__fastdepCC_FALSE@	$(AM_V_CC) @AM_BACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='auxiliary/mpeg4audio.c' object='auxiliary/ffmpeg_test-mpeg4audio.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(ffmpeg_test_CFLAGS) $(CFLAGS) -c -o auxiliary/ffmpeg_test-mpeg4audio.obj `if test -f 'auxiliary/mpeg4audio.c'; then $(CYGPATH_W) 'auxiliary/mpeg4audio.c'; else $(CYGPATH_W) '$(srcdir)/auxiliary/mpeg4audio.c'; fi`
 
 mostlyclean-libtool:
 	-rm -f *.lo
@@ -421,6 +489,8 @@ clean-generic:
 distclean-generic:
 	-test -z "$(CONFIG_CLEAN_FILES)" || rm -f $(CONFIG_CLEAN_FILES)
 	-test . = "$(srcdir)" || test -z "$(CONFIG_CLEAN_VPATH_FILES)" || rm -f $(CONFIG_CLEAN_VPATH_FILES)
+	-rm -f auxiliary/$(DEPDIR)/$(am__dirstamp)
+	-rm -f auxiliary/$(am__dirstamp)
 
 maintainer-clean-generic:
 	@echo "This command is intended for maintainers to use"
@@ -431,7 +501,7 @@ clean-am: clean-generic clean-libtool clean-noinstPROGRAMS \
 	mostlyclean-am
 
 distclean: distclean-am
-	-rm -rf ./$(DEPDIR)
+	-rm -rf ./$(DEPDIR) auxiliary/$(DEPDIR)
 	-rm -f Makefile
 distclean-am: clean-am distclean-compile distclean-generic \
 	distclean-tags
@@ -477,7 +547,7 @@ install-ps-am:
 installcheck-am:
 
 maintainer-clean: maintainer-clean-am
-	-rm -rf ./$(DEPDIR)
+	-rm -rf ./$(DEPDIR) auxiliary/$(DEPDIR)
 	-rm -f Makefile
 maintainer-clean-am: distclean-am maintainer-clean-generic
 
