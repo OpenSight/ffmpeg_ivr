@@ -216,7 +216,7 @@ int write_segment(void *opaque, const uint8_t *buf, size_t buf_size)
 
     fprintf(stderr, "\n");    
 */    
-//    fwrite(buf, 1, buf_size, stdout);
+    fwrite(buf, 1, buf_size, stdout);
     
     if((segment->buffer_max_size - segment->size) < buf_size){
         need_write = ret = segment->buffer_max_size - segment->size;

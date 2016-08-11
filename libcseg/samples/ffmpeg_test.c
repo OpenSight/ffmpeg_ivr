@@ -137,7 +137,10 @@ static int write_packet(AVPacket *pkt)
     int ret = 0;
     uint8_t *poutbuf = NULL;
     int poutbuf_size = 0;
-
+/*    
+    fprintf(stderr, "pkt stream index:%d, pts:%lld, dts:%lld, time_base:%d/%d\n",
+            pkt->stream_index, pkt->pts, pkt->dts, st->time_base.num, st->time_base.den);
+*/
     memset(&av_pkt, 0, sizeof(av_packet_t));
     av_pkt.av_stream_index = pkt->stream_index;
     if(pkt->flags & AV_PKT_FLAG_KEY){
@@ -160,7 +163,10 @@ static int write_packet(AVPacket *pkt)
     }else{
         av_pkt.dts = NOPTS_VALUE;
     }
-   
+/*    
+    fprintf(stderr, "av_pkt stream index:%d, pts:%lld, dts:%lld\n",
+            av_pkt.av_stream_index, av_pkt.pts, av_pkt.dts);    
+*/   
     if(codec->codec_type == AVMEDIA_TYPE_VIDEO && filter_ctx != NULL){
         int i;
         

@@ -29,7 +29,7 @@ typedef struct {
     uint8_t                payload_unit_start_indicator;
     uint8_t                continuity_count;
 
-    uint64_t             pcr;  // 90kHz time
+    int64_t             pcr;  // 90kHz time
     uint8_t                write_pcr;
     uint8_t                random_access_indicator;
     uint8_t                es_priority_indicator;
@@ -65,8 +65,8 @@ typedef struct {
     uint8_t   is_IDR;
     uint8_t   start;
 
-    uint16_t  dts;   // decoding time stamp in 90kHz unit
-    uint16_t  pts;   // presentation time stamp in 90kHz unit
+    int64_t  dts;   // decoding time stamp in 90kHz unit
+    int64_t  pts;   // presentation time stamp in 90kHz unit
 
     uint8_t   header_data[256];     // for header, PPS SPS etc
     size_t    header_len;
@@ -81,7 +81,7 @@ typedef struct {
     uint16_t              pid;
     uint8_t                start;
 
-    uint64_t             pts;   // presentation time stamp in 90kHz unit
+    int64_t             pts;   // presentation time stamp in 90kHz unit
 
     uint8_t                header_data[256];     // PES header + ADTS header
     size_t                header_len;
@@ -257,7 +257,7 @@ int ts_muxer_prepare_ts_packet_info(ts_muxer_ts_packet_t *packet, uint8_t payloa
         // for access unit start
         if (pes->start) {
             // prepare PCR
-            packet->pcr = pes->dts;
+            packet->pcr = pes->pts;
             packet->write_pcr = 1;
             is_adaptation_filed = 1;
             packet->len += 8;
@@ -471,7 +471,7 @@ int ts_muxer_enc_psi(struct _ts_muxer *ts)
     *buf++ = 0xF0;
     *buf++ = 0;
     // h264 stream, 1 byte stream type
-    if (0 == ts->program.video_stream.stream_type) {
+    if (0 != ts->program.video_stream.stream_type) {
         *buf++ = ts->program.video_stream.stream_type;
         *buf++ = 0xE0 | (ts->program.video_stream.pid >> 8);
         *buf++ = ts->program.video_stream.pid;
@@ -479,7 +479,7 @@ int ts_muxer_enc_psi(struct _ts_muxer *ts)
         *buf++ = 0x00;
     }
     // audio stream
-    if (0 == ts->program.audio_stream.stream_type) {
+    if (0 != ts->program.audio_stream.stream_type) {
         *buf++ = ts->program.audio_stream.stream_type;
         *buf++ = 0xE0 | (ts->program.audio_stream.pid >> 8);
         *buf++ = ts->program.audio_stream.pid;
@@ -531,6 +531,8 @@ int ts_muxer_prepare_h264_pes(ts_muxer_h264_stream_t *stream, ts_muxer_h264_pes_
     pes->payload = av_packet->data;
     pes->payload_len = av_packet->size;
     pes->filled = 0;
+    
+    
 
     // PES header
     buf = pes->header_data;
@@ -547,36 +549,51 @@ int ts_muxer_prepare_h264_pes(ts_muxer_h264_stream_t *stream, ts_muxer_h264_pes_
         // no DTS
         *buf++ = 0x80;
         *buf++ = 0x05;  // 1 byte PES_header_data_length
+
+
+        // 5 bytes PTS        
+        *buf++ = 0x21 | ((pes->pts >> 29) & 0x0E);
+        *buf++ = pes->pts >> 22;
+        *buf++ = (pes->pts >> 14) | 0x01;
+        *buf++ = pes->pts >> 7;
+        *buf++ = (pes->pts << 1) | 0x01;   
+
     } else {
         // PTS and DTS
         *buf++ = 0xC0;
         *buf++ = 0x0A;  // 1 byte PES_header_data_length
-    }
-    // 5 bytes PTS
-    *buf++ = 0x31 | ((pes->pts >> 29) & 0x0E);
-    *buf++ = pes->pts >> 22;
-    *buf++ = (pes->pts >> 14) | 0x01;
-    *buf++ = pes->pts >> 7;
-    *buf++ = (pes->pts << 1) | 0x01;
-    if (pes->dts >= 0) {
+        
+        // 5 bytes PTS        
+        *buf++ = 0x31 | ((pes->pts >> 29) & 0x0E);
+        *buf++ = pes->pts >> 22;
+        *buf++ = (pes->pts >> 14) | 0x01;
+        *buf++ = pes->pts >> 7;
+        *buf++ = (pes->pts << 1) | 0x01;   
+        
+        //5 byte DTS
         *buf++ = 0x11 | ((pes->dts >> 29) & 0x0E);
         *buf++ = pes->dts >> 22;
         *buf++ = (pes->dts >> 14) | 0x01;
         *buf++ = pes->dts >> 7;
-        *buf++ = (pes->dts << 1) | 0x01;
+        *buf++ = (pes->dts << 1) | 0x01;     
+
     }
+    // 5 bytes PTS
+
     // PES body
     // AU delimiter
-    /*
+    
     ts_muxer_set_32value(buf, 1);
     buf += 4;
     *buf++ = 0x09;
+    *buf++ = 0xf0;
+/*    
     if (pes->is_IDR) {
         *buf++ = 0x10;
     } else {
         *buf++ = 0x30;
     }
-     */
+*/    
 
     // let's add synchronization byte sequence before VCL NALU
     //ts_muxer_set_32value(buf, 1);
@@ -598,7 +615,6 @@ int ts_muxer_enc_h264_packet(ts_muxer_t* ts, ts_muxer_h264_stream_t* h264_stream
     if (NULL == ts || NULL == h264_stream || NULL == av_packet) {
         return -1;
     }
-
     pes = &h264_stream->pes;
     ts_packet = &ts->ts_packet;
 
