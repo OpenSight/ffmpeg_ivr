@@ -202,8 +202,21 @@ void cached_segment_reset(CachedSegment * segment)
 
 int write_segment(void *opaque, const uint8_t *buf, size_t buf_size)
 {  
+    
+
+    int i;
     CachedSegment * segment = (CachedSegment *) opaque;
-    int need_write = 0, ret = 0;
+    int need_write = 0, ret = 0;    
+/*    
+    fprintf(stderr, "write_segment(size:%d)\n", buf_size);
+
+    for(i = 0;i<buf_size;i++){
+        fprintf(stderr, "%02hhx ",buf[i]);
+    }
+
+    fprintf(stderr, "\n");    
+*/    
+//    fwrite(buf, 1, buf_size, stdout);
     
     if((segment->buffer_max_size - segment->size) < buf_size){
         need_write = ret = segment->buffer_max_size - segment->size;
@@ -735,6 +748,7 @@ int cseg_write_packet(CachedSegmentContext *cseg, av_packet_t *pkt)
     int is_ref_pkt = 1;
     int ret, can_split = 1;
     int stream_index = 0;
+    int i;
 
     stream_index = pkt->av_stream_index;
     
@@ -781,7 +795,15 @@ int cseg_write_packet(CachedSegmentContext *cseg, av_packet_t *pkt)
         }        
     }
     
-   
+/*   
+    fprintf(stderr, "dump packet(size:%d)\n", (int)pkt->size);
+
+    for(i = 0;i<10;i++){
+        fprintf(stderr, "%02hhx ",pkt->data[i]);
+    }
+
+    fprintf(stderr, "\n");
+*/   
     if (cseg->has_video) {
         can_split = st->type == AV_STREAM_TYPE_VIDEO &&
                     pkt->flags & AV_PACKET_FLAGS_KEY;
@@ -824,7 +846,7 @@ int cseg_write_packet(CachedSegmentContext *cseg, av_packet_t *pkt)
         if (ret < 0)
             return ret;
         cseg->cur_segment->start_ts = (double)(pkt->pts - cseg->start_pts)
-                                            / (double)TS_TIME_BASE;;        
+                                            / (double)TS_TIME_BASE + cseg->start_ts;        
         cseg->cur_segment->pos = cseg->start_pos;
         cseg->cur_segment->start_pts = pkt->pts;
         cseg->cur_segment->duration = 0.0;

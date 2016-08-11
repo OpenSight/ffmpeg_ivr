@@ -375,6 +375,7 @@ int ts_muxer_enc_psi(struct _ts_muxer *ts)
     uint32_t              crc32;
     ts_muxer_ts_pat_t     pat;
     ts_muxer_ts_pmt_t     pmt;
+    int i;
 
     if (NULL == ts) {
         return -1;
@@ -423,7 +424,8 @@ int ts_muxer_enc_psi(struct _ts_muxer *ts)
         *buf++ = 0xFF;
     }
 
-    if (ts->avio_write(ts->avio_context, buf, TS_MUXER_TX_PACKET_SIZE) < 0) {
+    
+    if (ts->avio_write(ts->avio_context, packet->buf, TS_MUXER_TX_PACKET_SIZE) < 0) {
         cseg_log(LOG_ERROR, "Failed to write PAT packet to avio context");
     }
 
@@ -433,6 +435,8 @@ int ts_muxer_enc_psi(struct _ts_muxer *ts)
     pmt.start = 1;
     pmt.pid = ts->program.pmt_pid;
     pmt.size = pmt.remain = 27; // we know the exact size because we are sure we will have at most 2 streams
+
+
 
     if (0 != ts_muxer_prepare_ts_packet_info(packet, TS_MUXER_PAYLOAD_PMT, &pmt, 0)) {
         return -1;
@@ -490,7 +494,15 @@ int ts_muxer_enc_psi(struct _ts_muxer *ts)
     while (buf <= packet->buf+TS_MUXER_TX_PACKET_SIZE) {
         *buf++ = 0xFF;
     }
+/*    
+    fprintf(stderr, "dump ts header(size:%d)\n", TS_MUXER_TX_PACKET_SIZE);
 
+    for(i = 0;i<TS_MUXER_TX_PACKET_SIZE;i++){
+        fprintf(stderr, "%02hhx ",packet->buf[i]);
+    }
+
+    fprintf(stderr, "\n");
+*/
     if (ts->avio_write(ts->avio_context, packet->buf, TS_MUXER_TX_PACKET_SIZE) < 0) {
         cseg_log(CSEG_LOG_ERROR, "Failed to write PMT packet to avio context");
     }

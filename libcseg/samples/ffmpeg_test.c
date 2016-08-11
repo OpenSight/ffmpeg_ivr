@@ -14,10 +14,13 @@
 #include "auxiliary/mpeg4audio.h"
 
 static AVFormatContext *fmt_ctx = NULL;
+static char * program_name = NULL;
 
 static const char *src_filename = NULL;
 static const char *dst_url = NULL;
 
+static AVBitStreamFilterContext *filter_ctx = NULL;
+static char * filter_name = NULL;
 
 static CachedSegmentContext *cseg_ctx = NULL;
 static av_stream_t *stream_infos = NULL;
@@ -115,12 +118,7 @@ static  int init_stream_info(void)
             break;
         }   
     }//for(int i=0; i<fmt_ctx_->nb_streams; i++) {  
-/*
-    for(i=0; i<stream_count; i++) {  
-        fprintf(stderr, "index:%d, type:%d, codec:%d\n", 
-                i, (int)stream_infos[i].type, (int)stream_infos[i].codec);
-    }      
-*/    
+  
     return 0;
         
 failed:
@@ -135,7 +133,11 @@ static int write_packet(AVPacket *pkt)
 {
     av_packet_t av_pkt;
     AVStream *st= fmt_ctx->streams[pkt->stream_index];
-    
+    AVCodecContext *codec= st->codec;
+    int ret = 0;
+    uint8_t *poutbuf = NULL;
+    int poutbuf_size = 0;
+
     memset(&av_pkt, 0, sizeof(av_packet_t));
     av_pkt.av_stream_index = pkt->stream_index;
     if(pkt->flags & AV_PKT_FLAG_KEY){
@@ -158,14 +160,49 @@ static int write_packet(AVPacket *pkt)
     }else{
         av_pkt.dts = NOPTS_VALUE;
     }
+   
+    if(codec->codec_type == AVMEDIA_TYPE_VIDEO && filter_ctx != NULL){
+        int i;
+        
+        av_packet_split_side_data(pkt);
+
+        ret = av_bitstream_filter_filter(filter_ctx,
+                                         codec, NULL,
+                                         &poutbuf, &poutbuf_size,
+                                         pkt->data, pkt->size, pkt->flags & AV_PKT_FLAG_KEY);
+        if(ret < 0){
+            fprintf(stderr, "filter failed: %d\n", ret);
+            return ret;
+        }else if(ret > 0){
+            av_pkt.data = poutbuf;
+            av_pkt.size = poutbuf_size;
+        }
+       
+    }
+
     
-    return cseg_write_packet(cseg_ctx, &av_pkt);
+    ret = cseg_write_packet(cseg_ctx, &av_pkt);
+  
+    if(av_pkt.data != pkt->data){
+        av_free(av_pkt.data);
+    }
+
+    return ret;
 }
 
 
 void signalHandlerShutdown(int sig) {
   fprintf(stderr, "Got shutdown signal %d\n", sig);
   should_shutdown = 1; 
+}
+
+void print_help(void)
+{
+        fprintf(stderr, "usage: %s [--ffmpeg_options string][--ffmpeg_vf filter_name] "
+                "input_file output_url\n"
+                "API example program to show how to use the libcseg API, which make\n"
+                "use of ffmpeg to input the frame\n", program_name);
+        exit(1);    
 }
 
 int main (int argc, char **argv)
@@ -175,33 +212,48 @@ int main (int argc, char **argv)
     AVDictionary *format_opts = NULL;
     AVPacket pkt;
 
-    if (argc != 3 && argc != 5) {
-        fprintf(stderr, "usage: %s [--ffmpeg_options string] "
-                "input_file output_url\n"
-                "API example program to show how to use the libcseg API, which make\n"
-                "use of ffmpeg to input the frame\n", argv[0]);
-        exit(1);
+    program_name = argv[0];
+    
+    
+    if (argc < 3) {
+        print_help();
+    }    
+    
+    while(strncmp(argv[1], "--", 2) == 0){
+        if(strcmp(argv[1], "--ffmpeg_options") == 0){
+            if(argc < 3 || argv[2] == NULL){
+                print_help();
+            }
+        
+            ret = av_dict_parse_string(&format_opts, 
+                                       argv[2],
+                                       "=", ",", 0);
+            if(ret){
+                //log
+                fprintf(stderr, "Failed to parse the ffmpeg_options_str:%s to av_dict(ret:%d)\n", 
+                         argv[1], ret);    
+                exit(1);   
+            }
+            argv++;  
+            argc--;
+            argv++;
+            argc--;
+        }else if(strcmp(argv[1], "--ffmpeg_vf") == 0){
+            if(argc < 3 || argv[2] == NULL){
+                print_help();
+            } 
+            filter_name = argv[2];
+            argv++;
+            argc--;
+            argv++;
+            argc--;
+        }else{
+            print_help();
+        }        
     }
-    if (argc == 5) {
-        if(strcmp(argv[1], "--ffmpeg_options") != 0){
-            fprintf(stderr, "only support --ffmpeg_options agument\n");
-            fprintf(stderr, "usage: %s [--ffmpeg_options string] "
-                    "input_file output_url\n"
-                    "API example program to show how to use the libcseg API, which make\n"
-                    "use of ffmpeg to input the frames\n", argv[0]);
-            exit(1);            
-        }
-        argv++;
-        ret = av_dict_parse_string(&format_opts, 
-                                   argv[1],
-                                   "=", ",", 0);
-        if(ret){
-            //log
-            fprintf(stderr, "Failed to parse the ffmpeg_options_str:%s to av_dict(ret:%d)\n", 
-                     argv[1], ret);    
-            exit(1);   
-        }
-        argv++;
+    
+    if(argc != 3){
+        print_help();
     }
     
     
@@ -222,6 +274,14 @@ int main (int argc, char **argv)
     av_log_set_level(AV_LOG_DEBUG);
 
     libcseg_init();
+
+    if(filter_name != NULL){
+        filter_ctx = av_bitstream_filter_init(filter_name);
+        if(filter_ctx == NULL){
+            fprintf(stderr, "Could not found video filter:%s\n", filter_name);
+            exit(1);            
+        }
+    }
 
     /* open input file, and allocate format context */
     if (avformat_open_input(&fmt_ctx, src_filename, NULL, &format_opts) < 0) {
@@ -274,7 +334,7 @@ int main (int argc, char **argv)
         fprintf(stderr, "Init cseg muxer failed: %d\n", ret);
         exit(1);                                   
     }
-  
+
 
     fprintf(stderr, "Start writing packets to %s\n", dst_url);
 
@@ -286,6 +346,8 @@ int main (int argc, char **argv)
     
     ret = 0;
     while(!should_shutdown){
+        pkt.data = NULL;
+        pkt.size = 0;
         ret = av_read_frame(fmt_ctx, &pkt);
         if (ret == AVERROR(EAGAIN)) {
             av_usleep(10000);
@@ -295,7 +357,7 @@ int main (int argc, char **argv)
             fprintf(stderr, "Read frame failed(%d): %s\n", ret, av_err2str(ret));
             break;
         }
-       
+     
         if((ret = write_packet(&pkt))< 0){
             fprintf(stderr, "failed to write frame to cseg context (%d): %s\n", ret, strerror(-ret));
             break;      
@@ -330,6 +392,11 @@ end:
         av_dict_free(&format_opts);
         format_opts = NULL;
     }   
+
+    if(filter_ctx != NULL){
+        av_bitstream_filter_close(filter_ctx);
+        filter_ctx = NULL;
+    }
 
     return ret < 0;
 }
