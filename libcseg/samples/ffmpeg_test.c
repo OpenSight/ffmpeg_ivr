@@ -129,6 +129,32 @@ failed:
     return ret;
 }
 
+
+static  int init_stream_info_fake(void)
+{
+    int ret = 0;
+    int i;
+    
+    if(fmt_ctx->nb_streams == 0){
+        fprintf(stderr, "no streams in the src file\n");
+        return -1;
+    }
+    stream_count = 1;
+    stream_infos = malloc(sizeof(av_stream_t) * stream_count);
+    memset(stream_infos, 0, sizeof(stream_infos) * stream_count);
+
+    stream_infos[0].type = AV_STREAM_TYPE_AUDIO;             
+    stream_infos[0].codec = AV_STREAM_CODEC_AAC;
+    stream_infos[0].audio_sample_rate = 16000;
+    stream_infos[0].audio_channel_count = 2;
+    stream_infos[0].audio_object_type = 2;
+
+    return 0;
+        
+
+}
+
+
 static int write_packet(AVPacket *pkt)
 {
     av_packet_t av_pkt;
@@ -140,9 +166,15 @@ static int write_packet(AVPacket *pkt)
 /*    
     fprintf(stderr, "pkt stream index:%d, pts:%lld, dts:%lld, time_base:%d/%d\n",
             pkt->stream_index, pkt->pts, pkt->dts, st->time_base.num, st->time_base.den);
+             * 
+             * 
 */
+    if(codec->codec_type != AVMEDIA_TYPE_AUDIO){
+        return 0;
+    }
+
     memset(&av_pkt, 0, sizeof(av_packet_t));
-    av_pkt.av_stream_index = pkt->stream_index;
+    av_pkt.av_stream_index = 0; //pkt->stream_index;
     if(pkt->flags & AV_PKT_FLAG_KEY){
         av_pkt.flags |= AV_PACKET_FLAGS_KEY;
     }
@@ -320,7 +352,7 @@ int main (int argc, char **argv)
 
     /* init the stream info config */
 
-    if(init_stream_info()){
+    if(init_stream_info_fake()){
         fprintf(stderr, "Init stream info failed\n");
         exit(1);        
     }
@@ -352,8 +384,6 @@ int main (int argc, char **argv)
     
     ret = 0;
     while(!should_shutdown){
-        pkt.data = NULL;
-        pkt.size = 0;
         ret = av_read_frame(fmt_ctx, &pkt);
         if (ret == AVERROR(EAGAIN)) {
             av_usleep(10000);

@@ -261,7 +261,12 @@ int ts_muxer_prepare_ts_packet_info(ts_muxer_ts_packet_t *packet, uint8_t payloa
         // for access unit start
         if (pes->start) {
             // prepare PCR
-            packet->pcr = pes->pts - TS_PTS_MAX_DELAY; /* 63000 delay*/
+            if(pes->dts != NOPTS_VALUE){
+                packet->pcr = pes->dts - TS_PTS_MAX_DELAY; /* 63000 delay*/                
+            }else{
+                packet->pcr = pes->pts - TS_PTS_MAX_DELAY; /* 63000 delay*/
+            }
+            
             packet->write_pcr = 1;
             is_adaptation_filed = 1;
             packet->len += 8;
@@ -785,7 +790,7 @@ int ts_muxer_prepare_aac_pes(ts_muxer_aac_stream_t *stream, ts_muxer_aac_pes_t *
 
         adts_frame_len = 7 + pes->payload_len;
         if (adts_frame_len >= 1 << 13) {
-            cseg_log(CSEG_LOG_ERROR, "flv ADTS frame too large");
+            cseg_log(CSEG_LOG_ERROR, "flv ADTS frame too large\n");
             return -1;
         }
 
