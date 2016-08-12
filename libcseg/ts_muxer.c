@@ -84,7 +84,6 @@ typedef struct {
 typedef struct {
     uint16_t            pid;
     uint8_t             start;
-    uint8_t             write_pcr;
 
     int64_t             pts;   // presentation time stamp in 90kHz unit
 
@@ -118,7 +117,6 @@ typedef struct {
     int          stream_index;  // stream index of av_context_t.streams
     uint16_t             pid;   // PID of corresponding TS packet for this ES
     // 0 indicates this ES not exists
-    uint8_t               write_pcr;  // if write PCR in this stream
     av_stream_codec_t     stream_codec;
     uint8_t               stream_type;
 
@@ -141,6 +139,7 @@ typedef struct {
 
 typedef struct {
     uint16_t             pmt_pid;       // can be choose from 0x0020-0x1FFA
+    uint16_t             pcr_pid;       // pid of stream which contain pcr
     ts_muxer_h264_stream_t  video_stream;
     ts_muxer_aac_stream_t   audio_stream;
 } ts_muxer_program_t;
@@ -220,6 +219,7 @@ const u_int32_t ts_muxer_aac_sample_frequencies[] = {
  *
  */
 int ts_muxer_prepare_ts_packet_info(ts_muxer_ts_packet_t *packet, uint8_t payload_type, void *payload,
+                                    uint16_t pcr_pid,
                                     uint8_t continuity_count)
 {
     ts_muxer_ts_pat_t *pat = NULL;
@@ -261,7 +261,7 @@ int ts_muxer_prepare_ts_packet_info(ts_muxer_ts_packet_t *packet, uint8_t payloa
             packet->random_access_indicator = 1;
         }
         // for access unit start
-        if (pes->start) {
+        if (pes->start && packet->pid == pcr_pid) {
             // prepare PCR
             if(pes->dts != NOPTS_VALUE){
                 packet->pcr = pes->dts - TS_PTS_MAX_DELAY; /* 63000 delay*/                
@@ -302,7 +302,7 @@ int ts_muxer_prepare_ts_packet_info(ts_muxer_ts_packet_t *packet, uint8_t payloa
         packet->pid = aac_pes->pid;
         packet->payload_unit_start_indicator = aac_pes->start;
         payload_remain = aac_pes->header_len + aac_pes->payload_len - aac_pes->filled;
-        if (aac_pes->start && aac_pes->write_pcr) {
+        if (aac_pes->start && packet->pid == pcr_pid) {
             // prepare PCR
             packet->pcr = aac_pes->pts - TS_PTS_MAX_DELAY; /* 63000 delay*/
             packet->write_pcr = 1;
@@ -418,7 +418,8 @@ int ts_muxer_enc_psi(struct _ts_muxer *ts)
     pat.pmt_pid = ts->program.pmt_pid;
     pat.size = pat.remain = 17;   // because we have only one program, so we know how largs PAT should be
 
-    if (0 != ts_muxer_prepare_ts_packet_info(packet, TS_MUXER_PAYLOAD_PAT, &pat, ts->pat_continuity_count)) {
+    if (0 != ts_muxer_prepare_ts_packet_info(packet, TS_MUXER_PAYLOAD_PAT, &pat, 
+                                             ts->program.pcr_pid, ts->pat_continuity_count)) {
         return -1;
     }
 
@@ -467,7 +468,8 @@ int ts_muxer_enc_psi(struct _ts_muxer *ts)
     pmt.pid = ts->program.pmt_pid;
     pmt.size = pmt.remain = 27; // we know the exact size because we are sure we will have at most 2 streams
 
-    if (0 != ts_muxer_prepare_ts_packet_info(packet, TS_MUXER_PAYLOAD_PMT, &pmt, ts->pmt_continuity_count)) {
+    if (0 != ts_muxer_prepare_ts_packet_info(packet, TS_MUXER_PAYLOAD_PMT, &pmt, 
+                                             ts->program.pcr_pid, ts->pmt_continuity_count)) {
         return -1;
     }
 
@@ -498,8 +500,10 @@ int ts_muxer_enc_psi(struct _ts_muxer *ts)
     *buf++ = 0; // 1 byte section number
     *buf++ = 0; // 1 byte current section number
     // 3 bit reserved and 13 bit of PCR_PID (usually the video stream PID)
-    *buf++ = 0xE0 | (ts->program.video_stream.pid >> 8);
-    *buf++ = ts->program.video_stream.pid;
+
+    *buf++ = 0xE0 | (ts->program.pcr_pid >> 8);
+    *buf++ = ts->program.pcr_pid;
+
     // 4 bit reserved 1, 12 bit program_info_length
     // don't known what this descriptor is, put 0 here
     *buf++ = 0xF0;
@@ -668,7 +672,8 @@ int ts_muxer_enc_h264_packet(ts_muxer_t* ts, ts_muxer_h264_stream_t* h264_stream
     while (pes->header_len + pes->payload_len > pes->filled && pes->header_len != 0) {
 
         // prepare av_packet
-        if (0 != ts_muxer_prepare_ts_packet_info(ts_packet, TS_MUXER_PAYLOAD_H264_PES, pes, h264_stream->continuity_count)) {
+        if (0 != ts_muxer_prepare_ts_packet_info(ts_packet, TS_MUXER_PAYLOAD_H264_PES, pes, 
+                                                 ts->program.pcr_pid, h264_stream->continuity_count)) {
             cseg_log(CSEG_LOG_ERROR, "Failed to prepare TS av_packet for H264 frame");
             return -1;
         }
@@ -739,9 +744,7 @@ int ts_muxer_prepare_aac_pes(ts_muxer_aac_stream_t *stream, ts_muxer_aac_pes_t *
     // fill PES header
     memset(pes, 0, sizeof(ts_muxer_aac_pes_t));
     pes->start = 1;
-    if (stream->write_pcr) {
-        pes->write_pcr = 1;
-    }
+
     pes->pid = stream->pid;
     pes->pts = av_packet->pts + TS_PTS_MAX_DELAY;
     pes->payload = av_packet->data;
@@ -758,7 +761,7 @@ int ts_muxer_prepare_aac_pes(ts_muxer_aac_stream_t *stream, ts_muxer_aac_pes_t *
     // 2 byte PES length, let's leave it 0 and fiil it at the end of this function
     *buf++ = 0x00;
     *buf++ = 0x00;
-    *buf++ = 0x84;
+    *buf++ = 0x80;
     *buf++ = 0x80;
     *buf++ = 0x05;  // 1 byte PES_header_data_length
     // 5 bytes PTS
@@ -866,7 +869,8 @@ int ts_muxer_enc_aac_packet(ts_muxer_t* ts, ts_muxer_aac_stream_t* aac_stream, a
     while (pes->header_len + pes->payload_len > pes->filled && pes->header_len != 0) {
 
         // prepare packet
-        if (0 != ts_muxer_prepare_ts_packet_info(ts_packet, TS_MUXER_PAYLOAD_AAC_PES, pes, aac_stream->continuity_count)) {
+        if (0 != ts_muxer_prepare_ts_packet_info(ts_packet, TS_MUXER_PAYLOAD_AAC_PES, pes, 
+                                                 ts->program.pcr_pid, aac_stream->continuity_count)) {
             cseg_log(CSEG_LOG_ERROR, "Failed to prepare TS packet for AAC frame");
             return -1;
         }
@@ -880,7 +884,6 @@ int ts_muxer_enc_aac_packet(ts_muxer_t* ts, ts_muxer_aac_stream_t* aac_stream, a
 
         // fill PES into TS packet
         pes->start = 0;
-        pes->write_pcr = 0;
         if (pes->filled < pes->header_len) {
             // fill PES header part
             len = MIN(pes->header_len - pes->filled, TS_MUXER_TX_PACKET_SIZE+ts_packet->buf-pos);
@@ -1020,9 +1023,12 @@ int ts_muxer_write_header(ts_muxer_t* ts_muxer) {
             }
         }
     }
-
-    if (0 == ts_muxer->program.video_stream.pid) {
-        ts_muxer->program.audio_stream.write_pcr = 1;
+    
+    if (0 != ts_muxer->program.video_stream.pid) {
+        ts_muxer->program.pcr_pid = ts_muxer->program.video_stream.pid;
+        
+    }else{
+        ts_muxer->program.pcr_pid = ts_muxer->program.audio_stream.pid;
     }
 
     if (0 == ts_muxer->program.pmt_pid) {
