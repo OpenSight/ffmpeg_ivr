@@ -19,8 +19,12 @@
 #define TS_MUXER_TX_PACKET_SIZE  188
 
 
+#define TS_PTS_MAX_DELAY    63000  /*1/90K, 0.7sec*/
+
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define MAX(a,b) (((a)>(b))?(a):(b))
+
+#define H264_NAL_TYPE_AUD   9
 
 
 typedef struct {
@@ -257,7 +261,7 @@ int ts_muxer_prepare_ts_packet_info(ts_muxer_ts_packet_t *packet, uint8_t payloa
         // for access unit start
         if (pes->start) {
             // prepare PCR
-            packet->pcr = pes->pts;
+            packet->pcr = pes->pts - TS_PTS_MAX_DELAY; /* 63000 delay*/
             packet->write_pcr = 1;
             is_adaptation_filed = 1;
             packet->len += 8;
@@ -531,7 +535,10 @@ int ts_muxer_prepare_h264_pes(ts_muxer_h264_stream_t *stream, ts_muxer_h264_pes_
     pes->is_IDR = av_packet->flags & AV_PACKET_FLAGS_KEY;
     pes->pid = stream->pid;
     pes->dts = av_packet->dts;
-    pes->pts = av_packet->pts;
+    if(pes->dts != NOPTS_VALUE){
+        pes->dts += TS_PTS_MAX_DELAY;
+    }
+    pes->pts = av_packet->pts + TS_PTS_MAX_DELAY;
     pes->payload = av_packet->data;
     pes->payload_len = av_packet->size;
     pes->filled = 0;
@@ -549,7 +556,7 @@ int ts_muxer_prepare_h264_pes(ts_muxer_h264_stream_t *stream, ts_muxer_h264_pes_
     *buf++ = 0x00;
     *buf++ = 0x00;
     *buf++ = 0x80;
-    if (pes->dts < 0) {
+    if (pes->dts == NOPTS_VALUE) {
         // no DTS
         *buf++ = 0x80;
         *buf++ = 0x05;  // 1 byte PES_header_data_length
@@ -582,15 +589,17 @@ int ts_muxer_prepare_h264_pes(ts_muxer_h264_stream_t *stream, ts_muxer_h264_pes_
         *buf++ = (pes->dts << 1) | 0x01;     
 
     }
-    // 5 bytes PTS
 
     // PES body
-    // AU delimiter
-    
-    ts_muxer_set_32value(buf, 1);
-    buf += 4;
-    *buf++ = 0x09;
-    *buf++ = 0xf0;
+    if(av_packet->size >= 5 && av_packet->data[0] == 0 &&
+       av_packet->data[1] == 0 && av_packet->data[2] == 0 &&
+       av_packet->data[3] == 1 && (av_packet->data[4] & 0x1F) != H264_NAL_TYPE_AUD){
+        // AU delimiter
+        ts_muxer_set_32value(buf, 1);
+        buf += 4;
+        *buf++ = 0x09;
+        *buf++ = 0xf0;        
+    }
 /*    
     if (pes->is_IDR) {
         *buf++ = 0x10;
@@ -701,7 +710,7 @@ int ts_muxer_prepare_aac_pes(ts_muxer_aac_stream_t *stream, ts_muxer_aac_pes_t *
     memset(pes, 0, sizeof(ts_muxer_aac_pes_t));
     pes->start = 1;
     pes->pid = stream->pid;
-    pes->pts = av_packet->pts;
+    pes->pts = av_packet->pts + TS_PTS_MAX_DELAY;
     pes->payload = av_packet->data;
     pes->payload_len = av_packet->size;
     pes->filled = 0;
