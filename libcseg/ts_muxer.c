@@ -487,7 +487,11 @@ int ts_muxer_enc_psi(struct _ts_muxer *ts)
         *buf++ = 0x00;
     }
     // CRC32
-    crc32 = ts_muxer_calc_crc32(buf - 22, 22);
+    if (0 == ts->program.video_stream.stream_type || 0 == ts->program.audio_stream.stream_type) {
+        crc32 = ts_muxer_calc_crc32(buf - 17, 17);
+    } else {
+        crc32 = ts_muxer_calc_crc32(buf - 22, 22);
+    }
     ts_muxer_set_32value(buf, crc32);
     buf += 4;
     // all stuffing afterwards
