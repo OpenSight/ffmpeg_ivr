@@ -82,8 +82,9 @@ typedef struct {
 } ts_muxer_h264_pes_t;
 
 typedef struct {
-    uint16_t              pid;
-    uint8_t                start;
+    uint16_t            pid;
+    uint8_t             start;
+    uint8_t             write_pcr;
 
     int64_t             pts;   // presentation time stamp in 90kHz unit
 
@@ -91,8 +92,6 @@ typedef struct {
     size_t                header_len;
     uint8_t*  payload;
     size_t    payload_len;
-    // PES length = PES header (including ADTS header) + ADTS frame + .....
-    //
 
     size_t                filled;       // number of bytes already filled in TS packets
 
@@ -110,7 +109,7 @@ typedef struct {
     uint8_t               stream_type;
     uint8_t               done;  // indicate whole stream is encoded in TS stream
     uint8_t               continuity_count; // for TS packet header
-    ts_muxer_h264_pes_t     pes;    // current PES, used to compose TS packet
+    ts_muxer_h264_pes_t   pes;    // current PES, used to compose TS packet
 
 } ts_muxer_h264_stream_t;
 
@@ -119,6 +118,7 @@ typedef struct {
     int          stream_index;  // stream index of av_context_t.streams
     uint16_t             pid;   // PID of corresponding TS packet for this ES
     // 0 indicates this ES not exists
+    uint8_t               write_pcr;  // if write PCR in this stream
     av_stream_codec_t     stream_codec;
     uint8_t               stream_type;
 
@@ -153,6 +153,8 @@ struct _ts_muxer {
     avio_write_func avio_write;
     ts_muxer_program_t program;
     ts_muxer_ts_packet_t ts_packet;
+    uint8_t pat_continuity_count;
+    uint8_t pmt_continuity_count;
 };
 
 #define ts_muxer_set_32value(p, n)                                             \
@@ -300,18 +302,34 @@ int ts_muxer_prepare_ts_packet_info(ts_muxer_ts_packet_t *packet, uint8_t payloa
         packet->pid = aac_pes->pid;
         packet->payload_unit_start_indicator = aac_pes->start;
         payload_remain = aac_pes->header_len + aac_pes->payload_len - aac_pes->filled;
+        if (aac_pes->start && aac_pes->write_pcr) {
+            // prepare PCR
+            packet->pcr = aac_pes->pts - TS_PTS_MAX_DELAY; /* 63000 delay*/
+            packet->write_pcr = 1;
+            is_adaptation_filed = 1;
+            packet->len += 8;
+        }
         if (payload_remain < 0) {
             return -1;
         }
-        if (payload_remain < (size_t)(188-packet->len)) {
-            packet->len += 2; // 2 byte adaption field header + 1 byte stuffing;
-            is_adaptation_filed = 1;
-            if (packet->len + 1 + payload_remain > 188) {
-                packet->header_stuffing_size = 1;
-                packet->len += 1;
-            } else {
+        if (payload_remain < (size_t)188 - packet->len) {
+            if (188 - packet->len - payload_remain >= 3) {
                 packet->header_stuffing_size = 188 - packet->len - payload_remain;
-                packet->len += packet->header_stuffing_size;
+                if (!is_adaptation_filed) {
+                    packet->header_stuffing_size -= 2; // need to add adaptation field header
+                    is_adaptation_filed = 1;
+                }
+                packet->len = 188 - payload_remain;
+            } else {
+                // fill only 1 byte stuff here, and move the rest of the remain to next packet
+                if (!is_adaptation_filed) {
+                    packet->len += 3; // 2 byte adaption field header + 1 byte stuffing;
+                    is_adaptation_filed = 1;
+                    packet->header_stuffing_size = 1;
+                } else {
+                    packet->len += 3;
+                    packet->header_stuffing_size = 3;
+                }
             }
         }
     } else if (TS_MUXER_PAYLOAD_EMPTY_PES == payload_type) {
@@ -400,8 +418,13 @@ int ts_muxer_enc_psi(struct _ts_muxer *ts)
     pat.pmt_pid = ts->program.pmt_pid;
     pat.size = pat.remain = 17;   // because we have only one program, so we know how largs PAT should be
 
-    if (0 != ts_muxer_prepare_ts_packet_info(packet, TS_MUXER_PAYLOAD_PAT, &pat, 0)) {
+    if (0 != ts_muxer_prepare_ts_packet_info(packet, TS_MUXER_PAYLOAD_PAT, &pat, ts->pat_continuity_count)) {
         return -1;
+    }
+
+    ts->pat_continuity_count++;
+    if (ts->pat_continuity_count > 0x0F) {
+        ts->pat_continuity_count = 0;
     }
 
     buf = ts_muxer_enc_packet_header(packet, buf);
@@ -433,7 +456,6 @@ int ts_muxer_enc_psi(struct _ts_muxer *ts)
         *buf++ = 0xFF;
     }
 
-    
     if (ts->avio_write(ts->avio_context, packet->buf, TS_MUXER_TX_PACKET_SIZE) < 0) {
         cseg_log(LOG_ERROR, "Failed to write PAT packet to avio context");
     }
@@ -445,10 +467,13 @@ int ts_muxer_enc_psi(struct _ts_muxer *ts)
     pmt.pid = ts->program.pmt_pid;
     pmt.size = pmt.remain = 27; // we know the exact size because we are sure we will have at most 2 streams
 
-
-
-    if (0 != ts_muxer_prepare_ts_packet_info(packet, TS_MUXER_PAYLOAD_PMT, &pmt, 0)) {
+    if (0 != ts_muxer_prepare_ts_packet_info(packet, TS_MUXER_PAYLOAD_PMT, &pmt, ts->pmt_continuity_count)) {
         return -1;
+    }
+
+    ts->pmt_continuity_count++;
+    if (ts->pmt_continuity_count > 0x0F) {
+        ts->pmt_continuity_count = 0;
     }
 
     buf = ts_muxer_enc_packet_header(packet, buf);
@@ -714,6 +739,9 @@ int ts_muxer_prepare_aac_pes(ts_muxer_aac_stream_t *stream, ts_muxer_aac_pes_t *
     // fill PES header
     memset(pes, 0, sizeof(ts_muxer_aac_pes_t));
     pes->start = 1;
+    if (stream->write_pcr) {
+        pes->write_pcr = 1;
+    }
     pes->pid = stream->pid;
     pes->pts = av_packet->pts + TS_PTS_MAX_DELAY;
     pes->payload = av_packet->data;
@@ -852,6 +880,7 @@ int ts_muxer_enc_aac_packet(ts_muxer_t* ts, ts_muxer_aac_stream_t* aac_stream, a
 
         // fill PES into TS packet
         pes->start = 0;
+        pes->write_pcr = 0;
         if (pes->filled < pes->header_len) {
             // fill PES header part
             len = MIN(pes->header_len - pes->filled, TS_MUXER_TX_PACKET_SIZE+ts_packet->buf-pos);
@@ -990,6 +1019,10 @@ int ts_muxer_write_header(ts_muxer_t* ts_muxer) {
                 ts_muxer->program.audio_stream.aac_sampling_frequency_index = j;
             }
         }
+    }
+
+    if (0 == ts_muxer->program.video_stream.pid) {
+        ts_muxer->program.audio_stream.write_pcr = 1;
     }
 
     if (0 == ts_muxer->program.pmt_pid) {
