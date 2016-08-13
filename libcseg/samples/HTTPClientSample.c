@@ -365,12 +365,12 @@ int main(int argc, CHAR *argv[])
         }
 
         // Send a request for the home page 
-        if(strlen(ClientParams.PostData) != 0){        
+        if(strlen(ClientParams.PostData) != 0){ 
             if((nRetCode = HTTPClientSendRequest(pHTTP,ClientParams.Uri,ClientParams.PostData,
                 strlen(ClientParams.PostData),TRUE,5,0)) != HTTP_CLIENT_SUCCESS)
             {
                 break;
-            }          
+            }       
         }else if(strlen(ClientParams.PutFilePath) != 0){   
             //get file size
             int ret;

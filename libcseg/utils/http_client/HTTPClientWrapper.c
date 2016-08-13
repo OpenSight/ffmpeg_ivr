@@ -171,7 +171,7 @@ int HTTPWrapperGetSocketError (int s)
 //
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-unsigned long HTTPWrapperGetHostByName(char *name,unsigned long *address)
+int HTTPWrapperGetHostByName(char *name, UINT32 *address)
 {
     HTTP_HOSTNET     *HostEntry;
     int     iPos = 0, iLen = 0,iNumPos = 0,iDots =0;
@@ -207,7 +207,7 @@ unsigned long HTTPWrapperGetHostByName(char *name,unsigned long *address)
                 iIPElement = atol(Num);
                 if(iIPElement > 256 || iDots > 3)
                 {
-                    return 0; // error invalid IP
+                    return -1; // error invalid IP
                 }
             }
         }
@@ -222,7 +222,7 @@ unsigned long HTTPWrapperGetHostByName(char *name,unsigned long *address)
         iIPElement = atol(Num);
         if(iIPElement > 256)
         {
-            return 0; // error invalid IP
+            return -1; // error invalid IP
         }
     }
     else
@@ -236,24 +236,24 @@ unsigned long HTTPWrapperGetHostByName(char *name,unsigned long *address)
         HostEntry = gethostbyname(name); 
         if(HostEntry)
         {
-            *(address) = *((u_long*)HostEntry->h_addr_list[0]);
+            *(address) = *((uint32_t*)HostEntry->h_addr_list[0]);
 
             //*(address) = (unsigned long)HostEntry->h_addr_list[0];
-            return 1; // Error 
+            return 0; // OK
         }
         else
         {
-            return 0; // OK
+            return -1; // Error
         }
     }
 
     else // numeric address - no need for DNS resolve
     {
         *(address) = inet_addr(name);
-        return 1;
+        return 0;
 
     }
-    return 0;
+    return -1;
 }
 
 
@@ -286,13 +286,13 @@ int HTTPWrapperGetRandomeNumber()
 //
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-long HTTPWrapperGetUpTime()
+int64_t HTTPWrapperGetUpTime()
 {
 #ifdef _WIN32
 
-    long lTime = 0;
+    int64_t lTime = 0;
 
-    lTime = (GetTickCount() / CLOCKS_PER_SEC);
+    lTime = ((int64_t)GetTickCount() / CLOCKS_PER_SEC);
     return lTime;
 
 #else
@@ -300,7 +300,7 @@ long HTTPWrapperGetUpTime()
 	struct timespec tp;
 
 	clock_gettime(CLOCK_MONOTONIC , &tp);
-	return tp.tv_sec;
+	return (int64_t)tp.tv_sec;
 
 #endif
 }

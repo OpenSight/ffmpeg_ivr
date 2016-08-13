@@ -86,10 +86,10 @@ extern "C" {
     int                                 HTTPWrapperIsAlNum              (int c);
     char*                               HTTPWrapperItoa                 (char *buff,int i);
     void                                HTTPWrapperInitRandomeNumber    ();
-    long                                HTTPWrapperGetUpTime            ();
+    int64_t                                HTTPWrapperGetUpTime            ();
     int                                 HTTPWrapperGetRandomeNumber     ();
     int                                 HTTPWrapperGetSocketError       (int s);
-    unsigned long                       HTTPWrapperGetHostByName        (char *name,unsigned long *address);
+    int                       HTTPWrapperGetHostByName        (char *name, UINT32 *address);
     int                                 HTTPWrapperShutDown             (int s,int in);  
     // SSL Wrapper prototypes
     int                                 HTTPWrapperSSLConnect           (int s,const struct sockaddr *name,int namelen,char *hostname);

@@ -647,7 +647,7 @@ UINT32 HTTPClientSendRequest (HTTP_SESSION_HANDLE pSession,
             // set the total content length header
             pHTTPSession->HttpHeadersInfo.nHTTPPostContentLength = nDataLength; // Store for later usage
             memset(ContentLength,0,32);
-            IToA(ContentLength,nDataLength); // Convert the buffer length to a string value
+            IToA(ContentLength, nDataLength); // Convert the buffer length to a string value
             if((nRetCode = HTTPIntrnHeadersAdd(pHTTPSession,"Content-Length",14,ContentLength,strlen(ContentLength)))!= HTTP_CLIENT_SUCCESS)
             {
                 break;
@@ -671,6 +671,7 @@ UINT32 HTTPClientSendRequest (HTTP_SESSION_HANDLE pSession,
             nRetCode = HTTP_CLIENT_ERROR_SOCKET_TIME_OUT;
             break;
         }
+      
         //  Handle connection close message (reconnect)
         if(pHTTPSession->HttpHeadersInfo.Connection == FALSE)
         {
@@ -744,17 +745,19 @@ UINT32 HTTPClientSendRequest (HTTP_SESSION_HANDLE pSession,
         }
         else
         {
+         
             // No authentication use the verb that was requested by the caller
             if((nRetCode = HTTPIntrnHeadersSend(pHTTPSession,pHTTPSession->HttpHeaders.HttpVerb)) != HTTP_CLIENT_SUCCESS)
             {
                 break;
             }
+         
         }
         // This the case where the caller know the total length to receive in advance
         // and he wishes to send the data right away
         if(pHTTPSession->HttpHeaders.HttpVerb == VerbPost &&  TotalLength == TRUE)
         {
-            
+
             // Send the data
             nBytes = nDataLength;    
             if((nRetCode = HTTPIntrnSend(pHTTPSession,pData,&nBytes)) != HTTP_CLIENT_SUCCESS)
@@ -763,6 +766,7 @@ UINT32 HTTPClientSendRequest (HTTP_SESSION_HANDLE pSession,
             }
             // Set the session state
             pHTTPSession->HttpState = pHTTPSession->HttpState | HTTP_CLIENT_STATE_POST_SENT;
+
         }
         
     }while(0);
@@ -1692,7 +1696,7 @@ UINT32 HTTPIntrnConnectionOpen (P_HTTP_SESSION pHTTPSession)
     HTTP_SOCKADDR_IN LoaclAddress;                       // Socket address structure (for client binding)
     do
     {
-        
+      
         if(!pHTTPSession)
         {
             nRetCode  =  HTTP_CLIENT_ERROR_INVALID_HANDLE;
@@ -1752,7 +1756,7 @@ UINT32 HTTPIntrnConnectionOpen (P_HTTP_SESSION pHTTPSession)
             
             Backup = HTTPStrExtract(pHTTPSession->HttpUrl.UrlHost.pParam,nNullOffset,0); 
             // Resolve the host name
-            nRetCode = HostByName(pHTTPSession->HttpUrl.UrlHost.pParam,(unsigned long*)&Address);
+            nRetCode = HostByName(pHTTPSession->HttpUrl.UrlHost.pParam, &Address);
             
             // Restore from backup (fix the buffer)
             HTTPStrExtract(pHTTPSession->HttpUrl.UrlHost.pParam,nNullOffset,Backup);
@@ -1762,7 +1766,7 @@ UINT32 HTTPIntrnConnectionOpen (P_HTTP_SESSION pHTTPSession)
         else
         {
             // Using a Proxy server so resolve the proxy host name
-            nRetCode = HostByName(pHTTPSession->HttpProxy.ProxyHost,(unsigned long*)&Address);
+            nRetCode = HostByName(pHTTPSession->HttpProxy.ProxyHost,&Address);
         }
         
         // See if we have a valid response from the net resolve operation

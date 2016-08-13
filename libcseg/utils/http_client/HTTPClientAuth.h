@@ -12,7 +12,7 @@
 
 typedef char HASH[HASHLEN];
 typedef char HASHHEX[HASHHEXLEN+1];
-typedef unsigned long uint32;
+typedef uint32_t uint32;
 
 // Base 64 Related 
 #define DECODE64(c)  (isascii(c) ? base64val[c] : BAD)
