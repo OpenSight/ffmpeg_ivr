@@ -169,12 +169,13 @@ static int write_packet(AVPacket *pkt)
              * 
              * 
 */
+/*
     if(codec->codec_type != AVMEDIA_TYPE_AUDIO){
         return 0;
     }
-
+*/
     memset(&av_pkt, 0, sizeof(av_packet_t));
-    av_pkt.av_stream_index = 0; //pkt->stream_index;
+    av_pkt.av_stream_index = pkt->stream_index;
     if(pkt->flags & AV_PKT_FLAG_KEY){
         av_pkt.flags |= AV_PACKET_FLAGS_KEY;
     }
@@ -352,7 +353,7 @@ int main (int argc, char **argv)
 
     /* init the stream info config */
 
-    if(init_stream_info_fake()){
+    if(init_stream_info()){
         fprintf(stderr, "Init stream info failed\n");
         exit(1);        
     }
