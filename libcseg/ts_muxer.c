@@ -257,11 +257,11 @@ int ts_muxer_prepare_ts_packet_info(ts_muxer_ts_packet_t *packet, uint8_t payloa
         if (pes->is_IDR) {
             packet->es_priority_indicator = 1;
         }
-        if (pes->start && pes->is_IDR) {
-            packet->random_access_indicator = 1;
-        }
-        // for access unit start
+        // for access unit start and pcr 
         if (pes->start && packet->pid == pcr_pid) {
+            if(pes->is_IDR){
+                packet->random_access_indicator = 1;
+            }
             // prepare PCR
             if(pes->dts != NOPTS_VALUE){
                 packet->pcr = pes->dts - TS_PTS_MAX_DELAY; /* 63000 delay*/                
@@ -303,6 +303,7 @@ int ts_muxer_prepare_ts_packet_info(ts_muxer_ts_packet_t *packet, uint8_t payloa
         packet->payload_unit_start_indicator = aac_pes->start;
         payload_remain = aac_pes->header_len + aac_pes->payload_len - aac_pes->filled;
         if (aac_pes->start && packet->pid == pcr_pid) {
+            packet->random_access_indicator = 1;
             // prepare PCR
             packet->pcr = aac_pes->pts - TS_PTS_MAX_DELAY; /* 63000 delay*/
             packet->write_pcr = 1;
@@ -368,7 +369,8 @@ uint8_t* ts_muxer_enc_packet_header(ts_muxer_ts_packet_t *packet, uint8_t *buf)
         *buf++ = packet->continuity_count | 0x30;
         len = 1+(packet->write_pcr?6:0)+packet->header_stuffing_size;    // adaptation_field_length = flag + PCR + stuffing
         *buf++ = len;
-        *buf++ = 0 | (packet->random_access_indicator?0x60:0) | (packet->write_pcr?0x10:0); // 1 byte indicators
+        *buf++ = 0 | (packet->random_access_indicator?0x40:0) | (packet->es_priority_indicator?0x20:0) |
+                (packet->write_pcr?0x10:0); // 1 byte indicators
         if (packet->write_pcr) {
             // write 6bytes PCR
             *buf++ = packet->pcr >> 25;
