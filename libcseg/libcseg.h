@@ -23,6 +23,7 @@
 
 #ifndef LIBCSEG_H
 #define LIBCSEG_H
+#include <stddef.h>
 
 #ifdef __cplusplus
 extern "C" {

@@ -33,19 +33,10 @@ extern "C" {
 
 
 /* private data structure used */
-
-typedef sturct vf_stream_private{
-    int64_t last_pts;
-    int64_t last_duration;
-    
-} vf_stream_private
-
-
 typedef struct vf_private{
     int is_started;
     double start_tp;
     int64_t stream_last_pts[MAX_STREAM_NUM];
-    int stream_count;
     int audio_stream_index;
 }vf_private;
 
@@ -107,7 +98,7 @@ int vf_cseg_sendAV(CachedSegmentContext *cseg,
                    int stream_index,
                    uint8_t* frame_data, 
                    uint32_t frame_len, 
-                   int codec_type, int frm_rate, int key);
+                   int codec_type, int frame_rate, int key);
 
 /**
  * release the cseg muxer context

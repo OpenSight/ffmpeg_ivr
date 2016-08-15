@@ -26,6 +26,8 @@
 #include <float.h>
 #include <stdint.h>
 #include <unistd.h>
+#include <pthread.h>
+
 #include "config.h"
 
 #include "libcseg.h"

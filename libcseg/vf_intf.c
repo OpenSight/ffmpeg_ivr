@@ -21,6 +21,10 @@
 **/
 
 #include <stdint.h>
+#include <stdio.h>
+#include <errno.h>
+#include <stdlib.h>
+#include <string.h>
 
 #include "vf_intf.h"
 
@@ -63,18 +67,17 @@ int vf_init_cseg_muxer(const char * filename,
     vf = cseg_malloc(sizeof(vf_private));
     memset(vf, 0, sizeof(vf_private));
     
-    vf.is_started = 0;
-    vf.start_ts = -1.0;
-    vf.audio_stream_index = -1;
-    vf.stream_cout = stream_count;
+    vf->is_started = 0;
+    vf->start_tp = -1.0;
+    vf->audio_stream_index = -1;
     for(i=0;i<stream_count;i++){
         if(streams[i].type == AV_STREAM_TYPE_VIDEO){
             video_index = i;
         }else if(streams[i].type == AV_STREAM_TYPE_AUDIO){
-            vf.audio_stream_index = i;            
+            vf->audio_stream_index = i;            
         }
         
-        vf.stream_last_pts[i] = NOPTS_VALUE;
+        vf->stream_last_pts[i] = NOPTS_VALUE;
 
     }
     if(video_index < 0){
@@ -89,9 +92,10 @@ int vf_init_cseg_muxer(const char * filename,
                           start_sequence,
                           segment_time, 
                           max_nb_segments,
+                          max_seg_size,
                           pre_recoding_time,
                           start_ts,
-                          start_sequence,
+                          io_timeout,
                           vf,
                           cseg);
     if(ret){
@@ -113,7 +117,7 @@ int vf_cseg_sendAV(CachedSegmentContext *cseg,
                    int stream_index,                   
                    uint8_t* frame_data, 
                    uint32_t frame_len, 
-                   int codec_type, int frm_rate, 
+                   int codec_type, int frame_rate, 
                    int key)
 {
     vf_private * vf = (vf_private *)get_cseg_muxer_private(cseg);
@@ -152,7 +156,7 @@ int vf_cseg_sendAV(CachedSegmentContext *cseg,
                     return ret;    
                 }
                 vf->is_started = 1;
-                vf->start_tp = (double)now_tp.tv_sec + (double)now_tp.nsec / 1000000000.0;
+                vf->start_tp = (double)now_tp.tv_sec + (double)now_tp.tv_nsec / 1000000000.0;
             }
         }
         
@@ -187,7 +191,7 @@ int vf_cseg_sendAV(CachedSegmentContext *cseg,
             ret = CSEG_ERROR(errno);
             return ret;            
         }
-        now_d = (double)now_tp.tv_sec + (double)now_tp.nsec / 1000000000.0;
+        now_d = (double)now_tp.tv_sec + (double)now_tp.tv_nsec / 1000000000.0;
         pkt.pts = (now_d - vf->start_tp) * TS_TIME_BASE + START_PTS;
         
     }else{
@@ -200,8 +204,10 @@ int vf_cseg_sendAV(CachedSegmentContext *cseg,
                     pkt.pts = vf->stream_last_pts[vf->audio_stream_index];
                 }else if(pkt.pts > vf->stream_last_pts[vf->audio_stream_index] +  PTS_MS_400){
                     frame_rate <<= 4;
+                    pkt.pts = vf->stream_last_pts[stream_index] + (int64_t)TS_TIME_BASE / frame_rate;
                 }else if(pkt.pts > vf->stream_last_pts[vf->audio_stream_index] +  PTS_MS_200){
                     frame_rate <<= 2;
+                    pkt.pts = vf->stream_last_pts[stream_index] + (int64_t)TS_TIME_BASE / frame_rate;
                 }                   
             }
         }else{
@@ -217,7 +223,8 @@ int vf_cseg_sendAV(CachedSegmentContext *cseg,
             }
             
         }
-    }
+    }    
+    vf->stream_last_pts[stream_index] = pkt.pts;
     
     return cseg_write_packet(cseg, &pkt);    
                        

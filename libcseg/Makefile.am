@@ -16,6 +16,8 @@ libcseg_la_SOURCES =  config.h \
     libcseg.h \
     ts_muxer.c \
     ts_muxer.h \
+    vf_intf.c \
+    vf_intf.h \
     utils/cJSON.c \
     utils/cJSON.h \
     utils/http_client/HTTPClient.c \

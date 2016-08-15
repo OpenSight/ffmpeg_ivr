@@ -76,7 +76,7 @@ am__installdirs = "$(DESTDIR)$(libdir)" "$(DESTDIR)$(pkgconfigdir)" \
 LTLIBRARIES = $(lib_LTLIBRARIES)
 libcseg_la_LIBADD =
 am__dirstamp = $(am__leading_dot)dirstamp
-am_libcseg_la_OBJECTS = min_cached_segment.lo ts_muxer.lo \
+am_libcseg_la_OBJECTS = min_cached_segment.lo ts_muxer.lo vf_intf.lo \
 	utils/cJSON.lo utils/http_client/HTTPClient.lo \
 	utils/http_client/HTTPClientAuth.lo \
 	utils/http_client/HTTPClientString.lo \
@@ -307,6 +307,8 @@ libcseg_la_SOURCES = config.h \
     libcseg.h \
     ts_muxer.c \
     ts_muxer.h \
+    vf_intf.c \
+    vf_intf.h \
     utils/cJSON.c \
     utils/cJSON.h \
     utils/http_client/HTTPClient.c \
@@ -454,6 +456,7 @@ distclean-compile:
 
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/min_cached_segment.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ts_muxer.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/vf_intf.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@seg_writers/$(DEPDIR)/cseg_dummy_writer.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@seg_writers/$(DEPDIR)/cseg_file_writer.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@seg_writers/$(DEPDIR)/cseg_ivr_writer.Plo@am__quote@
