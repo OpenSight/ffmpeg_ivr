@@ -325,7 +325,7 @@ libcseg_la_SOURCES = config.h \
     seg_writers/cseg_ivr_writer.c
 
 libcseg_la_LDFLAGS = -version-info 0:0:0 $(AM_LDFLAGS)   
-include_HEADERS = $(srcdir)/libcseg.h
+include_HEADERS = $(srcdir)/libcseg.h $(srcdir)/vf_intf.h
 all: all-recursive
 
 .SUFFIXES:

@@ -35,6 +35,6 @@ libcseg_la_SOURCES =  config.h \
 
 libcseg_la_LDFLAGS = -version-info 0:0:0 $(AM_LDFLAGS)   
                     
-include_HEADERS = $(srcdir)/libcseg.h
+include_HEADERS = $(srcdir)/libcseg.h $(srcdir)/vf_intf.h
 
 
