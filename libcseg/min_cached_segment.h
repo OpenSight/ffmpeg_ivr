@@ -154,7 +154,7 @@ typedef struct CachedSegmentWriter {
 } CachedSegmentWriter;
     
 
-#define  MAX_STREAM_NUM    4
+
 
 struct CachedSegmentContext {
     

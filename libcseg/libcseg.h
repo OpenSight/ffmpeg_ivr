@@ -62,6 +62,9 @@ typedef struct {
 
 #define   TS_TIME_BASE        ((int64_t)90000)
 
+#define  MAX_STREAM_NUM    4
+
+
 typedef struct {
     int av_stream_index;
     uint8_t   flags;  // flag: bit8 for is_sync
