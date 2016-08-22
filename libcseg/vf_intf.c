@@ -31,7 +31,6 @@
 #include "min_cached_segment.h"
 
 
-static double start_ts = -1;
 static int32_t io_timeout = 20000;   /*20 sec */
 static uint64_t start_sequence = 0; 
 
@@ -50,6 +49,7 @@ int vf_init_cseg_muxer(const char * filename,
                        int max_nb_segments,
                        uint32_t max_seg_size, 
                        double pre_recoding_time, 
+                       double start_ts,
                        CachedSegmentContext **cseg)
 {
     vf_private * vf = NULL;

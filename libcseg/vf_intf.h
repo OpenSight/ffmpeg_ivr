@@ -71,6 +71,7 @@ int vf_init_cseg_muxer(const char * filename,
                        int max_nb_segments,
                        uint32_t max_seg_size, 
                        double pre_recoding_time, 
+                       double start_ts, 
                        CachedSegmentContext **cseg);
                     
 /**
