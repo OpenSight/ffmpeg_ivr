@@ -1,7 +1,7 @@
 #include <stddef.h>
 #include <string.h>
 #include <stdlib.h>
-#include <libavutil/log.h>
+//#include <libavutil/log.h>
 
 #include "config.h"
 
@@ -404,7 +404,7 @@ int ts_muxer_enc_psi(struct _ts_muxer *ts)
     uint32_t              crc32;
     ts_muxer_ts_pat_t     pat;
     ts_muxer_ts_pmt_t     pmt;
-    int i;
+//    int i;
 
     if (NULL == ts) {
         return -1;
@@ -1007,7 +1007,7 @@ int ts_muxer_write_header(ts_muxer_t* ts_muxer) {
                    && (AV_STREAM_CODEC_AAC == av_stream->codec || AV_STREAM_CODEC_AAC_WITH_ADTS == av_stream->codec)) {
             if (0 == ts_muxer->program.audio_stream.pid) {
                 ts_muxer->program.pmt_pid = 0x0FF0;
-                ts_muxer->program.video_stream.stream_index = i;
+                ts_muxer->program.audio_stream.stream_index = i;
                 ts_muxer->program.audio_stream.pid = 0x1001;
                 ts_muxer->program.audio_stream.stream_codec = av_stream->codec;
                 ts_muxer->program.audio_stream.stream_type = TS_MUXER_STREAM_TYPE_AAC;
@@ -1088,6 +1088,13 @@ int ts_muxer_write_packet(ts_muxer_t* ts_muxer, av_packet_t* av_packet) {
                && ts_muxer->program.audio_stream.stream_type == TS_MUXER_STREAM_TYPE_AAC
                && ts_muxer->program.audio_stream.stream_index == av_packet->av_stream_index) {
         return ts_muxer_enc_aac_packet(ts_muxer, &ts_muxer->program.audio_stream, av_packet);
+        
+    } else if (av_stream->type == AV_STREAM_TYPE_AUDIO
+               && av_stream->codec == AV_STREAM_CODEC_AAC_WITH_ADTS
+               && ts_muxer->program.audio_stream.stream_type == TS_MUXER_STREAM_TYPE_AAC
+               && ts_muxer->program.audio_stream.stream_index == av_packet->av_stream_index) {
+        return ts_muxer_enc_aac_packet(ts_muxer, &ts_muxer->program.audio_stream, av_packet);
+    
     } else {
         cseg_log(CSEG_LOG_ERROR, "Unprepared stream type %d stream codec %d\n", av_stream->type, av_stream->codec);
         cseg_log(CSEG_LOG_ERROR, "program.video_stream.stream_type:%d, program.video_stream.stream_index: %d\n", 

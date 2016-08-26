@@ -25,6 +25,7 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/time.h>
 
 #include "vf_intf.h"
 
@@ -178,6 +179,11 @@ int vf_cseg_sendAV(CachedSegmentContext *cseg,
     
     if(streams[stream_index].codec == AV_STREAM_CODEC_AAC_WITH_ADTS){
         //trick: hack the frame data for correctness
+		frame_data[3] = 0x40; 
+		//sometimes, frame length of adts header is wrong.
+		frame_data[4] = (frame_len>>3)&0xff;
+		frame_data[5] &= 0x1f;
+		frame_data[5] |= (frame_len&0x7)<<5;
     }
         
     //calculate pts

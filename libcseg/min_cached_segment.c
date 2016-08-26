@@ -34,7 +34,7 @@
 
 #include "config.h"    
 #include "min_cached_segment.h"
-
+#include <sys/time.h>
 
 
 #define MIN(a,b) ((a) > (b) ? (b) : (a))
@@ -204,7 +204,7 @@ int write_segment(void *opaque, const uint8_t *buf, size_t buf_size)
 {  
     
 
-    int i;
+//    int i;
     CachedSegment * segment = (CachedSegment *) opaque;
     int need_write = 0, ret = 0;    
 /*    
@@ -335,10 +335,10 @@ void register_segment_writer(CachedSegmentWriter * writer)
 
 CachedSegmentWriter *find_segment_writer(char * filename)
 {
-    char hostname[1024], hoststr[1024], proto[16];
+    char hostname[1024], proto[16];
     char auth[1024];
     char path[MAX_URL_SIZE];
-    int port, i;
+    int port;//, i;
     CachedSegmentWriter * writer;
     
 
@@ -535,7 +535,7 @@ static void * consumer_routine(void *arg)
 
 static int cseg_start(CachedSegmentContext *cseg)
 {
-    char *filename;
+//    char *filename;
     int err = 0;
     CachedSegment * segment = NULL;
     
@@ -573,12 +573,13 @@ int libcseg_init(void)
     static int initialized = 0;
 
     if (initialized)
-        return;
+        return 0;
     initialized = 1;
     
     REGISTER_CSEG_WRITER(file);
     REGISTER_CSEG_WRITER(dummy);
     REGISTER_CSEG_WRITER(ivr);      
+    return 0;
 }
 
 
@@ -595,11 +596,7 @@ int init_cseg_muxer(const char * filename,
                     CachedSegmentContext **cseg)
 {
     CachedSegmentContext *new_cseg = NULL;
-    int ret, i;
-    char *p;
-    int basename_size;
-    CachedSegmentWriter * writer;
-    
+    int ret, i;    
     
     //check parameters
     if(cseg == NULL){
@@ -665,7 +662,7 @@ int init_cseg_muxer(const char * filename,
     init_segment_list(&new_cseg->free_list);    
 
         
-    if((new_cseg->ts_muxer = new_ts_muxer(streams, stream_count)) == NULL){
+    if((new_cseg->ts_muxer = new_ts_muxer(new_cseg->streams, stream_count)) == NULL){
         ret = CSEG_ERROR(ENOMEM);
         goto fail;
     }
@@ -748,7 +745,7 @@ int cseg_write_packet(CachedSegmentContext *cseg, av_packet_t *pkt)
     int is_ref_pkt = 1;
     int ret, can_split = 1;
     int stream_index = 0;
-    int i;
+//    int i;
 
     stream_index = pkt->av_stream_index;
     
@@ -872,9 +869,9 @@ void release_cseg_muxer(CachedSegmentContext *cseg)
     
     // flush the last segment
     do{
-        double seg_start_ts;
-        int64_t cur_segment_size = 0;
-        int is_cached_list_full = 0;
+//        double seg_start_ts;
+//        int64_t cur_segment_size = 0;
+//        int is_cached_list_full = 0;
 
         ts_muxer_set_avio_context(cseg->ts_muxer, NULL, NULL);
         

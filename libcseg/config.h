@@ -24,6 +24,7 @@
 #include <float.h>
 #include <stdint.h>
 #include <unistd.h>
+#include <stdio.h>
 
 #ifdef __cplusplus
 extern "C" {
