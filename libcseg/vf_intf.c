@@ -198,7 +198,11 @@ int vf_cseg_sendAV(CachedSegmentContext *cseg,
             return ret;            
         }
         now_d = (double)now_tp.tv_sec + (double)now_tp.tv_nsec / 1000000000.0;
-        pkt.pts = (now_d - vf->start_tp) * TS_TIME_BASE + START_PTS;
+        if( now_d - vf->start_tp <= 0.001){
+            pkt.pts = START_PTS;
+        }else{
+            pkt.pts = (now_d - vf->start_tp) * TS_TIME_BASE + START_PTS;            
+        }
         
     }else{
         if(streams[stream_index].type == AV_STREAM_TYPE_VIDEO){
