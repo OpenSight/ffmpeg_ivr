@@ -41,8 +41,8 @@ static uint64_t start_sequence = 0;
 
 #define START_PTS       (int64_t)90000
 
-#define PTS_MS_200      18000
-#define PTS_MS_400      36000
+#define PTS_MS_250      22500
+#define PTS_MS_500      45000
 
 int vf_init_cseg_muxer(const char * filename,
                        av_stream_t* streams, uint8_t stream_count,
@@ -210,13 +210,13 @@ int vf_cseg_sendAV(CachedSegmentContext *cseg,
             if(vf->audio_stream_index != -1 && 
                vf->stream_last_pts[vf->audio_stream_index] != NOPTS_VALUE){
                 //sync PTS with audio 
-                if(pkt.pts + PTS_MS_200 < vf->stream_last_pts[vf->audio_stream_index]){
+                if(pkt.pts + PTS_MS_250 < vf->stream_last_pts[vf->audio_stream_index]){
                     pkt.pts = vf->stream_last_pts[vf->audio_stream_index];
-                }else if(pkt.pts > vf->stream_last_pts[vf->audio_stream_index] +  PTS_MS_400){
-                    frame_rate <<= 4;
+                }else if(pkt.pts > vf->stream_last_pts[vf->audio_stream_index] +  PTS_MS_500){
+                    frame_rate <<= 3;
                     pkt.pts = vf->stream_last_pts[stream_index] + (int64_t)TS_TIME_BASE / frame_rate;
-                }else if(pkt.pts > vf->stream_last_pts[vf->audio_stream_index] +  PTS_MS_200){
-                    frame_rate <<= 2;
+                }else if(pkt.pts > vf->stream_last_pts[vf->audio_stream_index] +  PTS_MS_250){
+                    frame_rate <<= 1;
                     pkt.pts = vf->stream_last_pts[stream_index] + (int64_t)TS_TIME_BASE / frame_rate;
                 }                   
             }
