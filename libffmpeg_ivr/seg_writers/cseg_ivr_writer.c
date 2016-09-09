@@ -41,6 +41,17 @@
 
 #define HTTP_DEFAULT_RETRY_NUM    2
 
+#define RAMDOM_SLEEP_MAX_MS     47
+
+static void random_msleep()
+{
+    struct timeval tv;
+    int ms;
+    gettimeofday(&tv, NULL);
+    ms = tv.tv_usec % RAMDOM_SLEEP_MAX_MS + 1;
+    usleep(ms * 1000);
+}
+
 static int http_status_to_av_code(int status_code)
 {
     if(status_code == 400){
@@ -197,6 +208,7 @@ static int http_post(char * http_uri,
                 //retry
                 curl_easy_cleanup(easyhandle);  
                 easyhandle = NULL;
+                random_msleep(); //sleep random 1 ~ 50 ms
                 continue;
             }
         }
@@ -344,6 +356,7 @@ static int http_put(char * http_uri,
                 //retry
                 curl_easy_cleanup(easyhandle);  
                 easyhandle = NULL;
+                random_msleep(); //sleep random 1 ~ 50 ms
                 continue;
             }
         }
