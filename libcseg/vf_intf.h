@@ -59,8 +59,7 @@ typedef struct vf_private{
  * @param start_ts  the start timestamp (in seconds, from epoch) of the first segment
  *                  when it is given 0 or negative, this context would tate the 
  *                  system current time as it.
- * @param io_timeout  the timeout time (in milli-seconds) for writer IO
- * @param private_data the user private data
+ * @param need_cst_adjust  change the local timestamp from utc to cst 
  * @param cseg  the output cseg muxer context
  * 
  * @return 0 on success, a negative number on error. 
