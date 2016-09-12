@@ -38,6 +38,7 @@ typedef struct vf_private{
     double start_tp;
     int64_t stream_last_pts[MAX_STREAM_NUM];
     int audio_stream_index;
+    int need_cst_adjust;
 }vf_private;
 
 /**
@@ -72,6 +73,7 @@ int vf_init_cseg_muxer(const char * filename,
                        uint32_t max_seg_size, 
                        double pre_recoding_time, 
                        double start_ts, 
+                       int need_cst_adjust,
                        CachedSegmentContext **cseg);
                     
 /**

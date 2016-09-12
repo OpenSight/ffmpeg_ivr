@@ -44,6 +44,8 @@ static uint64_t start_sequence = 0;
 #define PTS_MS_250      22500
 #define PTS_MS_500      45000
 
+#define CST_DIFF        (-28800.0)
+
 int vf_init_cseg_muxer(const char * filename,
                        av_stream_t* streams, uint8_t stream_count,
                        double segment_time,
@@ -51,6 +53,7 @@ int vf_init_cseg_muxer(const char * filename,
                        uint32_t max_seg_size, 
                        double pre_recoding_time, 
                        double start_ts,
+                       int need_cst_adjust,
                        CachedSegmentContext **cseg)
 {
     vf_private * vf = NULL;
@@ -70,6 +73,7 @@ int vf_init_cseg_muxer(const char * filename,
     
     vf->is_started = 0;
     vf->start_tp = -1.0;
+    vf->need_cst_adjust = need_cst_adjust;
     vf->audio_stream_index = -1;
     for(i=0;i<stream_count;i++){
         if(streams[i].type == AV_STREAM_TYPE_VIDEO){
@@ -158,6 +162,11 @@ int vf_cseg_sendAV(CachedSegmentContext *cseg,
                 }
                 vf->is_started = 1;
                 vf->start_tp = (double)now_tp.tv_sec + (double)now_tp.tv_nsec / 1000000000.0;
+                
+                if(vf->need_cst_adjust && cseg->start_ts < 0.000001){
+                    cseg->start_ts = (double)now.tv_sec + ((double)now.tv_usec) / 1000000.0 
+                                     +  CST_DIFF;
+                }
             }
         }
         
