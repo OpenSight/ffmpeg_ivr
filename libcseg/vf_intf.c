@@ -32,7 +32,7 @@
 #include "min_cached_segment.h"
 
 
-static int32_t io_timeout = 20000;   /*20 sec */
+static int32_t io_timeout = 30000;   /* 30 sec */
 static uint64_t start_sequence = 0; 
 
 #define AAC_SAMPLE_PER_FRAME   1024

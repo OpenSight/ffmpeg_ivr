@@ -40,12 +40,14 @@ extern "C" {
 
 
 /* error handling */
-#if EDOM > 0
-#define CSEG_ERROR(e) (-(e))   ///< Returns a negative error code from a POSIX error code, to return from library functions.
-#else
+//#if EDOM > 0
+//#define CSEG_ERROR(e) (-(e))   ///< Returns a negative error code from a POSIX error code, to return from library functions.
+//#else
 /* Some platforms have E* and errno already negated. */
-#define CSEG_ERROR(e) (e)
-#endif
+//#define CSEG_ERROR(e) (e)
+//#endif
+
+#define CSEG_ERROR(e)  (((e)>0)?(-(e)):(e))
 
 /**
  * Something went really wrong and we will crash now.
