@@ -27,7 +27,7 @@
 #include <pthread.h>
 #include <math.h>
 #include <stdio.h>
-#include <sys/time.h>
+
     
 #include "../min_cached_segment.h"
 #include "../utils/cJSON.h"
@@ -79,7 +79,6 @@ static int http_status_to_av_code(int status_code)
 static inline int http_need_retry(int ret)
 {
     switch(ret){
-    case HTTP_CLIENT_ERROR_SOCKET_TIME_OUT:
     case HTTP_CLIENT_ERROR_NO_MEMORY:
         return 0;
         break;
