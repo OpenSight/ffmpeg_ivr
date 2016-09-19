@@ -27,7 +27,7 @@
 #include <pthread.h>
 #include <math.h>
 #include <stdio.h>
-
+#include <sys/time.h>
     
 #include "../min_cached_segment.h"
 #include "../utils/cJSON.h"
