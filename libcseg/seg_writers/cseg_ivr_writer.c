@@ -451,8 +451,8 @@ static int create_file(char * ivr_rest_uri,
         if(response_size != 0){
             json_root = cJSON_Parse(http_response_json);
             if(json_root== NULL){
-                cseg_log(CSEG_LOG_ERROR,  "[cseg_ivr_writer] HTTP create file status code(%d):%s\n", 
-                       status_code, "reason unknown");
+                cseg_log(CSEG_LOG_ERROR,  "[cseg_ivr_writer] HTTP create file (%s) status code(%d):%s\n", 
+                       ivr_rest_uri, status_code, "reason unknown");
             }else{
                 json_info = cJSON_GetObjectItem(json_root, IVR_ERR_INFO_FIELD_KEY);
                 if(json_info && json_info->type == cJSON_String && json_info->valuestring){            
@@ -550,8 +550,8 @@ static int save_file(char * ivr_rest_uri,
         if(response_size != 0){
             json_root = cJSON_Parse(http_response_json);
             if(json_root== NULL){
-                cseg_log(CSEG_LOG_ERROR,  "[cseg_ivr_writer] HTTP create file status code(%d):%s\n", 
-                       status_code, "reason unknown");   
+                cseg_log(CSEG_LOG_ERROR,  "[cseg_ivr_writer] HTTP create file (%s) status code(%d):%s\n", 
+                       ivr_rest_uri, status_code, "reason unknown");   
             }else{
                 json_info = cJSON_GetObjectItem(json_root, IVR_ERR_INFO_FIELD_KEY);
                 if(json_info && json_info->type == cJSON_String && json_info->valuestring){
@@ -576,26 +576,24 @@ failed:
     return ret;
 
 }
+#define MAX_FILE_NAME 256
+#define MAX_URI_LEN 1024
 
 
 static int ivr_init(CachedSegmentContext *cseg)
 {
-   
-    return 0;
-}
-
-
-#define MAX_FILE_NAME 256
-#define MAX_URI_LEN 1024
-
-static int ivr_write_segment(CachedSegmentContext *cseg, CachedSegment *segment)
-{
-    char ivr_rest_uri[MAX_URI_LEN] = "http";
-    char file_uri[MAX_URI_LEN];
-    char filename[MAX_FILE_NAME];
+    int ret = 0; 
     char *p;
-    int ret = 0;
-
+   
+    cseg->writer_priv = cseg_malloc(MAX_URI_LEN);
+    if(cseg->writer_priv == NULL){
+        ret = CSEG_ERROR(ENOMEM);
+        goto fail;
+    }
+    memset(cseg->writer_priv, 0, MAX_URI_LEN);
+    strcpy((char *)cseg->writer_priv, "http");
+    
+    
     if(cseg->filename == NULL || strlen(cseg->filename) == 0){
         ret = CSEG_ERROR(EINVAL);
         cseg_log(CSEG_LOG_ERROR,  "[cseg_ivr_writer] http filename absent\n");          
@@ -610,13 +608,39 @@ static int ivr_write_segment(CachedSegmentContext *cseg, CachedSegment *segment)
 
     p = strchr(cseg->filename, ':');  
     if(p){
-        strncat(ivr_rest_uri, p, MAX_URI_LEN);
+        strncat((char *)cseg->writer_priv, p, (MAX_URI_LEN - 5));
     }else{
         ret = CSEG_ERROR(EINVAL);
         cseg_log(CSEG_LOG_ERROR,  "[cseg_ivr_writer] filename malformat\n");
         goto fail;
-    }
+    }    
     
+    return 0;
+    
+fail:
+    if(cseg->writer_priv != NULL){
+        cseg_free(cseg->writer_priv);
+        cseg->writer_priv = NULL;
+    }
+    return ret;    
+    
+}
+
+
+
+static int ivr_write_segment(CachedSegmentContext *cseg, CachedSegment *segment)
+{
+    char * ivr_rest_uri = (char *)cseg->writer_priv;
+    char file_uri[MAX_URI_LEN];
+    char filename[MAX_FILE_NAME];
+    int ret = 0;
+    
+    if(ivr_rest_uri == NULL ||strlen(ivr_rest_uri) == 0){
+        ret = CSEG_ERROR(EINVAL);
+        cseg_log(CSEG_LOG_ERROR,  "[cseg_ivr_writer] http uri absent, cseg_ivr_writer may be un-inited\n");          
+        goto fail;          
+    }
+
     //get URI of the file for segment
     ret = create_file(ivr_rest_uri, 
                       cseg->io_timeout,
@@ -662,6 +686,10 @@ fail:
 
 static void ivr_uninit(CachedSegmentContext *cseg)
 {
+    if(cseg->writer_priv != NULL){
+        cseg_free(cseg->writer_priv);
+        cseg->writer_priv = NULL;
+    }    
     //curl_global_cleanup();
 }
 
