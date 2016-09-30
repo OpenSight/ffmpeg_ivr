@@ -1770,13 +1770,13 @@ UINT32 HTTPIntrnConnectionOpen (P_HTTP_SESSION pHTTPSession)
         }
         
         // See if we have a valid response from the net resolve operation
-        /*
+
         if(nRetCode)
         {
-        nRetCode = HTTP_CLIENT_ERROR_SOCKET_RESOLVE;
-        break;
+            nRetCode = HTTP_CLIENT_ERROR_SOCKET_RESOLVE;
+            break;
         }
-        */
+
         // Reset the address structures
         memset(&ServerAddress, 0, sizeof(HTTP_SOCKADDR_IN)); 
         memset(&LoaclAddress, 0, sizeof(HTTP_SOCKADDR_IN)); 

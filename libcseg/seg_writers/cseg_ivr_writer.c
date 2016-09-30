@@ -453,12 +453,6 @@ static int create_file(char * ivr_rest_uri,
             if(json_root== NULL){
                 cseg_log(CSEG_LOG_ERROR, "[cseg_ivr_writer] HTTP create file (%s) status code(%d):%s\n", 
                        ivr_rest_uri, status_code, "reason unknown");
-                
-                //ISP sometimes would hijack the http reqeust and return 404
-                if(status_code == 404){
-                    cseg_log(CSEG_LOG_WARNING, "[cseg_ivr_writer] unknown 404, return empty filename\n"); 
-                    ret = 0;
-                }
             }else{
                 json_info = cJSON_GetObjectItem(json_root, IVR_ERR_INFO_FIELD_KEY);
                 if(json_info && json_info->type == cJSON_String && json_info->valuestring){            
@@ -466,14 +460,8 @@ static int create_file(char * ivr_rest_uri,
                            status_code, json_info->valuestring);
                 }        
             }//if(json_root== NULL)
-        }else{
-            
-            //ISP sometimes would hijack the http reqeust and return 404
-            if(status_code == 404){
-                cseg_log(CSEG_LOG_WARNING, "[cseg_ivr_writer] unknown 404, return empty filename\n"); 
-                ret = 0;
-            }
         }
+        
         goto failed;
         
     }//if(status_code >= 200 && status_code < 300){
@@ -565,13 +553,7 @@ static int save_file(char * ivr_rest_uri,
             json_root = cJSON_Parse(http_response_json);
             if(json_root== NULL){
                 cseg_log(CSEG_LOG_ERROR,  "[cseg_ivr_writer] HTTP save file (%s) status code(%d):%s\n", 
-                       ivr_rest_uri, status_code, "reason unknown");   
-                
-                //ISP sometimes would hijack the http reqeust and return 404
-                if(status_code == 404){
-                    cseg_log(CSEG_LOG_WARNING, "[cseg_ivr_writer] unknown 404, ignore\n"); 
-                    ret = 0;
-                }                       
+                       ivr_rest_uri, status_code, "reason unknown");                     
             }else{
                 json_info = cJSON_GetObjectItem(json_root, IVR_ERR_INFO_FIELD_KEY);
                 if(json_info && json_info->type == cJSON_String && json_info->valuestring){
@@ -579,13 +561,6 @@ static int save_file(char * ivr_rest_uri,
                        status_code, json_info->valuestring);
                 }                 
             }//if(json_root== NULL)
-        }else{
-            
-            //ISP sometimes would hijack the http reqeust and return 404
-            if(status_code == 404){
-                cseg_log(CSEG_LOG_WARNING, "[cseg_ivr_writer] unknown 404, ignore\n"); 
-                ret = 0;
-            }
         }//if(response_size != 0)
         
         goto failed;
