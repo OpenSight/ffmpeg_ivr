@@ -852,6 +852,8 @@ int cseg_write_packet(CachedSegmentContext *cseg, av_packet_t *pkt)
     
     ret = ts_muxer_write_packet(cseg->ts_muxer, pkt);
     if(ret){
+        cseg_log(CSEG_LOG_ERROR, 
+               "ts_muxer_write_packet faile(%d)\n", ret);         
         ret = CSEG_ERROR(EFAULT);
     }
 
