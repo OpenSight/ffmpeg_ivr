@@ -39,6 +39,8 @@ typedef struct vf_private{
     int64_t stream_last_pts[MAX_STREAM_NUM];
     int audio_stream_index;
     int need_cst_adjust;
+    uint8_t * frame_buf;
+    size_t   buf_size; 
 }vf_private;
 
 /**

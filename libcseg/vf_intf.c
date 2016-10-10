@@ -46,6 +46,8 @@ static uint64_t start_sequence = 0;
 
 #define CST_DIFF        (-28800.0)
 
+#define  BUF_INIT_SIZE    (131072)    //128K
+
 int vf_init_cseg_muxer(const char * filename,
                        av_stream_t* streams, uint8_t stream_count,
                        double segment_time,
@@ -69,12 +71,27 @@ int vf_init_cseg_muxer(const char * filename,
     }
     
     vf = cseg_malloc(sizeof(vf_private));
+    if(!vf){
+        cseg_log(CSEG_LOG_ERROR,
+               "no memory for vf structure\n");
+        return CSEG_ERROR(ENOMEM);          
+    }
     memset(vf, 0, sizeof(vf_private));
     
     vf->is_started = 0;
     vf->start_tp = -1.0;
     vf->need_cst_adjust = need_cst_adjust;
     vf->audio_stream_index = -1;
+    vf->buf_size = BUF_INIT_SIZE;
+    vf->frame_buf = (uint8_t *)cseg_malloc(BUF_INIT_SIZE);
+    if(!vf->frame_buf){
+        cseg_log(CSEG_LOG_ERROR,
+               "no memory for vf structure\n");
+        ret = CSEG_ERROR(ENOMEM);     
+        goto fail;
+    }
+    
+    
     for(i=0;i<stream_count;i++){
         if(streams[i].type == AV_STREAM_TYPE_VIDEO){
             video_index = i;
@@ -88,8 +105,10 @@ int vf_init_cseg_muxer(const char * filename,
     if(video_index < 0){
         cseg_log(CSEG_LOG_ERROR,
                "video stream absent\n");
-        return CSEG_ERROR(EINVAL);    
+        ret = CSEG_ERROR(EINVAL);  
+        goto fail;
     }
+    
     
     
     ret = init_cseg_muxer(filename,
@@ -111,10 +130,113 @@ int vf_init_cseg_muxer(const char * filename,
 
 fail:
     if(vf){
+        if(vf->frame_buf){
+            cseg_free(vf->frame_buf);
+            vf->frame_buf = NULL;
+        }
+        
         cseg_free(vf);
         vf = NULL;
     }
     return ret;
+}
+static int vf_realloc_frame_buf(vf_private * vf, size_t size)
+{
+    //check if need realloc?
+    if(vf->buf_size >= size && vf->frame_buf != NULL){
+        return 0;
+    }
+    
+    if(vf->buf_size == 0){
+        vf->buf_size = BUF_INIT_SIZE;
+    }
+    
+    //find a size bigger than target size
+    while(vf->buf_size < size) {
+        vf->buf_size = vf->buf_size * 2;
+    }
+    
+    //realloc a buffer
+    if(vf->frame_buf != NULL){
+        cseg_free(vf->frame_buf);
+        vf->frame_buf = NULL;
+    }
+    vf->frame_buf = (uint8_t *)cseg_malloc(vf->buf_size);
+    if(vf->frame_buf == NULL){
+        vf->buf_size = 0;
+        return CSEG_ERROR(ENOMEM);  
+    }
+    
+    return 0;
+    
+}
+
+/* NAL unit types */
+enum {
+    NAL_SLICE           = 1,
+    NAL_DPA             = 2,
+    NAL_DPB             = 3,
+    NAL_DPC             = 4,
+    NAL_IDR_SLICE       = 5,
+    NAL_SEI             = 6,
+    NAL_SPS             = 7,
+    NAL_PPS             = 8,
+    NAL_AUD             = 9,
+    NAL_END_SEQUENCE    = 10,
+    NAL_END_STREAM      = 11,
+    NAL_FILLER_DATA     = 12,
+    NAL_SPS_EXT         = 13,
+    NAL_AUXILIARY_SLICE = 19,
+    NAL_FF_IGNORE       = 0xff0f001,
+};
+
+static void vf_filter_sei(uint8_t *src, uint8_t *dst, uint32_t *len)
+{
+    uint32_t src_len = (*len);
+    uint32_t dst_len = 0;
+    uint8_t *nal_start = NULL;
+    uint8_t nal_type = 0;
+    uint32_t nal_len = 0;
+    uint32_t i;
+    
+    for(i=0; i + 4 < src_len; i++){
+        if(src[i] == 0 && src[i+1] == 0 && src[i+2] == 0 && src[i+3] == 1){ 
+            //now, we get a nal at i
+            
+            if(nal_start != NULL){
+                nal_len = src + i - nal_start;
+                
+                if(nal_type == NAL_AUD || nal_type == NAL_SPS || 
+                   nal_type == NAL_PPS || nal_type <= 5){
+                    
+                    memcpy(dst + dst_len, nal_start, nal_len);
+                    dst_len += nal_len;
+                }
+            }
+            
+            nal_start = src + i;
+            nal_type = src[i+4] & 0x1f;
+            
+            if(nal_type <= 5){ //VCL
+                break;//as for vcl nal, quick copy the left
+            }
+        }//if(src[i] == 0 && src[i+1] == 0 && src[i+2] == 0 && src[i+3] == 1){
+    }//for(i=0; i + 4 < src_len; i++){
+    
+    if(nal_start != NULL){
+        nal_len = src + src_len - nal_start;
+                
+        if(nal_type == NAL_AUD || nal_type == NAL_SPS || 
+            nal_type == NAL_PPS || nal_type <= 5){
+                    
+            memcpy(dst + dst_len, nal_start, nal_len);
+            dst_len += nal_len;
+        }
+    }    
+    
+    (*len) = dst_len; 
+    
+    
 }
 
 
@@ -193,6 +315,20 @@ int vf_cseg_sendAV(CachedSegmentContext *cseg,
 		frame_data[4] = (frame_len>>3)&0xff;
 		frame_data[5] &= 0x1f;
 		frame_data[5] |= (frame_len&0x7)<<5;
+    }else if(streams[stream_index].codec == AV_STREAM_CODEC_H264 && key){
+        //trick: delete the SEI nal in the IDR frame
+        uint32_t new_frame_len = frame_len;
+        
+        ret = vf_realloc_frame_buf(vf, frame_len);
+        if(ret){
+            cseg_log(CSEG_LOG_ERROR,
+                       "realloc frame buf failed\n");
+            return ret;              
+        }
+        
+        vf_filter_sei(frame_data, vf->frame_buf, &new_frame_len);
+        pkt.data = vf->frame_buf;
+        pkt.size = new_frame_len;
     }
         
     //calculate pts
@@ -242,7 +378,8 @@ int vf_cseg_sendAV(CachedSegmentContext *cseg,
             }
             
         }
-    }    
+        
+    }//if(vf->stream_last_pts[stream_index] == NOPTS_VALUE)   
     vf->stream_last_pts[stream_index] = pkt.pts;
     
     return cseg_write_packet(cseg, &pkt);    
@@ -255,6 +392,12 @@ void vf_release_cseg_muxer(CachedSegmentContext *cseg)
     vf_private * vf = (vf_private *)get_cseg_muxer_private(cseg);
     release_cseg_muxer(cseg);
     if(vf){
+        
+        if(vf->frame_buf){
+            cseg_free(vf->frame_buf);
+            vf->frame_buf = NULL;
+        }
+        
         cseg_free(vf);
     }
     
