@@ -190,7 +190,7 @@ enum {
     NAL_FF_IGNORE       = 0xff0f001,
 };
 
-static void vf_filter_sei(uint8_t *src, uint8_t *dst, uint32_t *len)
+static void vf_filter_sei(const uint8_t *src, uint8_t *dst, uint32_t *len)
 {
     uint32_t src_len = (*len);
     uint32_t dst_len = 0;
