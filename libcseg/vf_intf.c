@@ -82,6 +82,7 @@ int vf_init_cseg_muxer(const char * filename,
     vf->start_tp = -1.0;
     vf->need_cst_adjust = need_cst_adjust;
     vf->audio_stream_index = -1;
+#ifdef  VF_SEI_FILTER    
     vf->buf_size = BUF_INIT_SIZE;
     vf->frame_buf = (uint8_t *)cseg_malloc(BUF_INIT_SIZE);
     if(!vf->frame_buf){
@@ -90,7 +91,7 @@ int vf_init_cseg_muxer(const char * filename,
         ret = CSEG_ERROR(ENOMEM);     
         goto fail;
     }
-    
+#endif    
     
     for(i=0;i<stream_count;i++){
         if(streams[i].type == AV_STREAM_TYPE_VIDEO){
@@ -130,16 +131,19 @@ int vf_init_cseg_muxer(const char * filename,
 
 fail:
     if(vf){
+#ifdef  VF_SEI_FILTER          
         if(vf->frame_buf){
             cseg_free(vf->frame_buf);
             vf->frame_buf = NULL;
         }
-        
+#endif        
         cseg_free(vf);
         vf = NULL;
     }
     return ret;
 }
+
+#ifdef  VF_SEI_FILTER  
 static int vf_realloc_frame_buf(vf_private * vf, size_t size)
 {
     //check if need realloc?
@@ -238,7 +242,7 @@ static void vf_filter_sei(const uint8_t *src, uint8_t *dst, uint32_t *len)
     
     
 }
-
+#endif
 
 int vf_cseg_sendAV(CachedSegmentContext *cseg, 
                    int stream_index,                   
@@ -310,12 +314,14 @@ int vf_cseg_sendAV(CachedSegmentContext *cseg,
     
     if(streams[stream_index].codec == AV_STREAM_CODEC_AAC_WITH_ADTS){
         //trick: hack the frame data for correctness
-		frame_data[3] = 0x40; 
+		frame_data[3] = 0x80; 
 		//sometimes, frame length of adts header is wrong.
 		frame_data[4] = (frame_len>>3)&0xff;
 		frame_data[5] &= 0x1f;
 		frame_data[5] |= (frame_len&0x7)<<5;
-    }else if(streams[stream_index].codec == AV_STREAM_CODEC_H264 && key){
+    }
+#ifdef VF_SEI_FILTER  
+    else if(streams[stream_index].codec == AV_STREAM_CODEC_H264 && key){
         //trick: delete the SEI nal in the IDR frame
         uint32_t new_frame_len = frame_len;
         
@@ -330,7 +336,7 @@ int vf_cseg_sendAV(CachedSegmentContext *cseg,
         pkt.data = vf->frame_buf;
         pkt.size = new_frame_len;
     }
-        
+#endif        
     //calculate pts
     if(vf->stream_last_pts[stream_index] == NOPTS_VALUE){
         struct timespec now_tp;
@@ -392,12 +398,12 @@ void vf_release_cseg_muxer(CachedSegmentContext *cseg)
     vf_private * vf = (vf_private *)get_cseg_muxer_private(cseg);
     release_cseg_muxer(cseg);
     if(vf){
-        
+#ifdef VF_SEI_FILTER          
         if(vf->frame_buf){
             cseg_free(vf->frame_buf);
             vf->frame_buf = NULL;
         }
-        
+#endif        
         cseg_free(vf);
     }
     

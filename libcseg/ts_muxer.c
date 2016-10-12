@@ -377,7 +377,7 @@ uint8_t* ts_muxer_enc_packet_header(ts_muxer_ts_packet_t *packet, uint8_t *buf)
             *buf++ = packet->pcr >> 17;
             *buf++ = packet->pcr >> 9;
             *buf++ = packet->pcr >> 1;
-            *buf++ = (packet->pcr & 1) | 0x7E;
+            *buf++ = ((packet->pcr & 1) << 7) | 0x7E;
             *buf++ = 0;
         }
         // stuff
