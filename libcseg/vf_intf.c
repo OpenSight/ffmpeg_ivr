@@ -46,7 +46,7 @@ static uint64_t start_sequence = 0;
 
 #define CST_DIFF        (-28800.0)
 
-#define  BUF_INIT_SIZE    (131072)    //128K
+#define  BUF_INIT_SIZE    (32768)    //32KB
 
 int vf_init_cseg_muxer(const char * filename,
                        av_stream_t* streams, uint8_t stream_count,
@@ -81,8 +81,7 @@ int vf_init_cseg_muxer(const char * filename,
     vf->is_started = 0;
     vf->start_tp = -1.0;
     vf->need_cst_adjust = need_cst_adjust;
-    vf->audio_stream_index = -1;
-#ifdef  VF_SEI_FILTER    
+    vf->audio_stream_index = -1;  
     vf->buf_size = BUF_INIT_SIZE;
     vf->frame_buf = (uint8_t *)cseg_malloc(BUF_INIT_SIZE);
     if(!vf->frame_buf){
@@ -90,8 +89,7 @@ int vf_init_cseg_muxer(const char * filename,
                "no memory for vf structure\n");
         ret = CSEG_ERROR(ENOMEM);     
         goto fail;
-    }
-#endif    
+    }   
     
     for(i=0;i<stream_count;i++){
         if(streams[i].type == AV_STREAM_TYPE_VIDEO){
@@ -131,19 +129,17 @@ int vf_init_cseg_muxer(const char * filename,
 
 fail:
     if(vf){
-#ifdef  VF_SEI_FILTER          
         if(vf->frame_buf){
             cseg_free(vf->frame_buf);
             vf->frame_buf = NULL;
         }
-#endif        
         cseg_free(vf);
         vf = NULL;
     }
     return ret;
 }
 
-#ifdef  VF_SEI_FILTER  
+
 static int vf_realloc_frame_buf(vf_private * vf, size_t size)
 {
     //check if need realloc?
@@ -175,6 +171,7 @@ static int vf_realloc_frame_buf(vf_private * vf, size_t size)
     
 }
 
+#ifdef  VF_SEI_FILTER  
 /* NAL unit types */
 enum {
     NAL_SLICE           = 1,
@@ -246,7 +243,7 @@ static void vf_filter_sei(const uint8_t *src, uint8_t *dst, uint32_t *len)
 
 int vf_cseg_sendAV(CachedSegmentContext *cseg, 
                    int stream_index,                   
-                   uint8_t* frame_data, 
+                   const uint8_t* frame_data, 
                    uint32_t frame_len, 
                    int codec_type, int frame_rate, 
                    int key)
@@ -313,12 +310,22 @@ int vf_cseg_sendAV(CachedSegmentContext *cseg,
     pkt.dts = NOPTS_VALUE;
     
     if(streams[stream_index].codec == AV_STREAM_CODEC_AAC_WITH_ADTS){
+        //copy the audio frame to internal buffer
+        ret = vf_realloc_frame_buf(vf, frame_len);
+        if(ret){
+            cseg_log(CSEG_LOG_ERROR,
+                       "realloc frame buf failed\n");
+            return ret;              
+        }
+        memcpy(vf->frame_buf, frame_data, frame_len);
+        pkt.data = vf->frame_buf;
+
         //trick: hack the frame data for correctness
-		frame_data[3] = 0x80; 
+		pkt.data[3] = 0x80; 
 		//sometimes, frame length of adts header is wrong.
-		frame_data[4] = (frame_len>>3)&0xff;
-		frame_data[5] &= 0x1f;
-		frame_data[5] |= (frame_len&0x7)<<5;
+		pkt.data[4] = (frame_len>>3)&0xff;
+		pkt.data[5] &= 0x1f;
+		pkt.data[5] |= (frame_len&0x7)<<5; 
     }
 #ifdef VF_SEI_FILTER  
     else if(streams[stream_index].codec == AV_STREAM_CODEC_H264 && key){
@@ -397,13 +404,11 @@ void vf_release_cseg_muxer(CachedSegmentContext *cseg)
 {
     vf_private * vf = (vf_private *)get_cseg_muxer_private(cseg);
     release_cseg_muxer(cseg);
-    if(vf){
-#ifdef VF_SEI_FILTER          
+    if(vf){      
         if(vf->frame_buf){
             cseg_free(vf->frame_buf);
             vf->frame_buf = NULL;
-        }
-#endif        
+        }    
         cseg_free(vf);
     }
     

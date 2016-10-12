@@ -39,10 +39,9 @@ typedef struct vf_private{
     int64_t stream_last_pts[MAX_STREAM_NUM];
     int audio_stream_index;
     int need_cst_adjust;
-#ifdef  VF_SEI_FILTER    
     uint8_t * frame_buf;
     size_t   buf_size; 
-#endif    
+  
 }vf_private;
 
 /**
@@ -102,7 +101,7 @@ int vf_init_cseg_muxer(const char * filename,
  */
 int vf_cseg_sendAV(CachedSegmentContext *cseg, 
                    int stream_index,
-                   uint8_t* frame_data, 
+                   const uint8_t* frame_data, 
                    uint32_t frame_len, 
                    int codec_type, int frame_rate, int key);
 
