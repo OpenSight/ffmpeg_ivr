@@ -145,7 +145,7 @@ HTTP_SESSION_HANDLE  HTTPClientOpenRequest (HTTP_CLIENT_SESSION_FLAGS Flags)
     // Set the outgoing headers pointers
     pHTTPSession->HttpHeaders.HeadersOut.pParam = pHTTPSession->HttpHeaders.HeadersBuffer.pParam;
     // Set our state
-    pHTTPSession->HttpState = pHTTPSession->HttpState | HTTP_CLIENT_STATE_INIT;
+    pHTTPSession->HttpState = HTTP_CLIENT_STATE_INIT;
     
     // Save the flags
     pHTTPSession->HttpFlags = Flags;
@@ -153,6 +153,9 @@ HTTP_SESSION_HANDLE  HTTPClientOpenRequest (HTTP_CLIENT_SESSION_FLAGS Flags)
     // Reset the status
     pHTTPSession->HttpHeadersInfo.nHTTPStatus = 0;
     // Return an allocated session pointer (cast to UINT32 first)
+    
+    //Reset the Cache
+    pHTTPSession->HttpNameCache.port = HTTP_CLIENT_DEFAULT_PORT;
     return (HTTP_SESSION_HANDLE)pHTTPSession;
 }
 
@@ -255,6 +258,30 @@ UINT32  HTTPClientSetDebugHook (HTTP_SESSION_HANDLE pSession,
     return HTTP_CLIENT_SUCCESS;
 }
 #endif
+
+///////////////////////////////////////////////////////////////////////////////
+//
+// Function     : HTTPClientSetConnection
+// Purpose      : Sets the HTTP Connection 
+// Returns      : HTTP Status
+// Last updated : 01/09/2005
+//
+///////////////////////////////////////////////////////////////////////////////
+UINT32  HTTPClientSetConnection(HTTP_SESSION_HANDLE pSession, BOOL Connection)
+{
+    P_HTTP_SESSION pHTTPSession = NULL;
+    
+    
+    // Cast the handle to our internal structure and check the pointers validity
+    pHTTPSession = (P_HTTP_SESSION)pSession;
+    if(!pHTTPSession)
+    {
+        return HTTP_CLIENT_ERROR_INVALID_HANDLE;
+    }
+    pHTTPSession->HttpHeadersInfo.Connection = Connection;
+    
+    return HTTP_CLIENT_SUCCESS;    
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 //
@@ -574,6 +601,15 @@ UINT32 HTTPClientSendRequest (HTTP_SESSION_HANDLE pSession,
             break;
         }
         
+        //check if the DNS cached hostname and port is consistent with the current url, 
+        //otherwise force to reconnect
+        if(strncmp(pHTTPSession->HttpUrl.UrlHost.pParam, pHTTPSession->HttpNameCache.hostname, 
+                  pHTTPSession->HttpUrl.UrlHost.nLength) != 0 ||
+           pHTTPSession->HttpUrl.nPort != pHTTPSession->HttpNameCache.port){
+            //if hostname or port changed, reconnect the server
+            pHTTPSession->HttpHeadersInfo.Connection = FALSE;
+        }
+        
         // Create the default headers
         // Add the "Host" header. we should handle a special case of port incorporated within the host name.
         if((pHTTPSession->HttpFlags & HTTP_CLIENT_FLAG_URLANDPORT) != HTTP_CLIENT_FLAG_URLANDPORT)
@@ -715,7 +751,7 @@ UINT32 HTTPClientSendRequest (HTTP_SESSION_HANDLE pSession,
                     
                     // Send the data
                     nBytes = nDataLength;    
-                    if((nRetCode = HTTPIntrnSend(pHTTPSession,pData,&nBytes)) != HTTP_CLIENT_SUCCESS)
+                    if((nRetCode = HTTPIntrnRetrySend(pHTTPSession,pData,nBytes)) != HTTP_CLIENT_SUCCESS)
                     {   
                         break;
                     }
@@ -760,7 +796,7 @@ UINT32 HTTPClientSendRequest (HTTP_SESSION_HANDLE pSession,
 
             // Send the data
             nBytes = nDataLength;    
-            if((nRetCode = HTTPIntrnSend(pHTTPSession,pData,&nBytes)) != HTTP_CLIENT_SUCCESS)
+            if((nRetCode = HTTPIntrnRetrySend(pHTTPSession,pData,nBytes)) != HTTP_CLIENT_SUCCESS)
             {   
                 break;
             }
@@ -862,7 +898,7 @@ UINT32 HTTPClientWriteData (HTTP_SESSION_HANDLE pSession,
             if(pHTTPSession->HttpCounters.nSentChunks >= 1)
             {
                 nBytes = 2;;
-                nRetCode = HTTPIntrnSend(pHTTPSession,HTTP_CLIENT_CRLF,&nBytes);
+                nRetCode = HTTPIntrnRetrySend(pHTTPSession,HTTP_CLIENT_CRLF,nBytes);
                 if(nRetCode != HTTP_CLIENT_SUCCESS)
                 {
                     break;
@@ -871,7 +907,7 @@ UINT32 HTTPClientWriteData (HTTP_SESSION_HANDLE pSession,
             
             // Send the chunk header
             nBytes = strlen(Chunk);
-            nRetCode = HTTPIntrnSend(pHTTPSession,Chunk,&nBytes);
+            nRetCode = HTTPIntrnRetrySend(pHTTPSession,Chunk,nBytes);
             if(nRetCode != HTTP_CLIENT_SUCCESS)
             {
                 break;
@@ -910,7 +946,7 @@ UINT32 HTTPClientWriteData (HTTP_SESSION_HANDLE pSession,
             {
                 // Send the trailing CrLf
                 nBytes = 2;;
-                nRetCode = HTTPIntrnSend(pHTTPSession,HTTP_CLIENT_CRLF,&nBytes);
+                nRetCode = HTTPIntrnRetrySend(pHTTPSession,HTTP_CLIENT_CRLF,nBytes);
                 if(nRetCode != HTTP_CLIENT_SUCCESS)
                 {
                     break;
@@ -1755,9 +1791,26 @@ UINT32 HTTPIntrnConnectionOpen (P_HTTP_SESSION pHTTPSession)
             }
             
             Backup = HTTPStrExtract(pHTTPSession->HttpUrl.UrlHost.pParam,nNullOffset,0); 
-            // Resolve the host name
-            nRetCode = HostByName(pHTTPSession->HttpUrl.UrlHost.pParam, &Address);
-            
+         
+            if(strcmp(pHTTPSession->HttpNameCache.hostname, pHTTPSession->HttpUrl.UrlHost.pParam) == 0 && 
+               HTTPWrapperGetUpTime() <= pHTTPSession->HttpNameCache.expire_time){
+                nRetCode = 0;
+                Address = pHTTPSession->HttpNameCache.addr;
+                
+            }else{
+
+                // Resolve the host name
+                nRetCode = HostByName(pHTTPSession->HttpUrl.UrlHost.pParam, &Address);
+               
+                if(nRetCode == HTTP_CLIENT_SUCCESS){
+                    strncpy(pHTTPSession->HttpNameCache.hostname, pHTTPSession->HttpUrl.UrlHost.pParam,
+                            HTTP_CLIENT_MAX_URL_LENGTH - 1);
+                    pHTTPSession->HttpNameCache.addr = Address;
+                    pHTTPSession->HttpNameCache.port = pHTTPSession->HttpUrl.nPort;
+                    pHTTPSession->HttpNameCache.expire_time = HTTPWrapperGetUpTime() + DNS_RESOLVE_CACHED_TIME /* 2 hour */;
+                }
+            }
+          
             // Restore from backup (fix the buffer)
             HTTPStrExtract(pHTTPSession->HttpUrl.UrlHost.pParam,nNullOffset,Backup);
             
@@ -1860,6 +1913,26 @@ UINT32 HTTPIntrnConnectionOpen (P_HTTP_SESSION pHTTPSession)
 #endif
     
     return nRetCode; 
+}
+
+UINT32 HTTPIntrnRetrySend(P_HTTP_SESSION pHTTPSession, CHAR *pData, UINT32 nLength)
+{
+    UINT32          nRetCode     = HTTP_CLIENT_SUCCESS;
+    UINT32          nBytes;
+    UINT32          len;
+    
+    len = 0;
+    while(len < nLength){
+        nBytes = nLength - len;
+        nRetCode = HTTPIntrnSend(pHTTPSession,pData + len, &nBytes);
+        if(nRetCode != HTTP_CLIENT_SUCCESS)
+        {
+            break;
+        }
+        len += nBytes;
+    }              
+    return nRetCode;
+    
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -2878,7 +2951,7 @@ UINT32 HTTPIntrnHeadersSend(P_HTTP_SESSION pHTTPSession,
         memset(RequestCmd,0x00,16);
         strcpy(RequestCmd,pHTTPSession->HttpHeaders.Verb);
         strcat(RequestCmd," ");
-        if((nRetCode = HTTPIntrnSend(pHTTPSession,RequestCmd,&nBytes)) != HTTP_CLIENT_SUCCESS)
+        if((nRetCode = HTTPIntrnRetrySend(pHTTPSession,RequestCmd,nBytes)) != HTTP_CLIENT_SUCCESS)
         {   
             break;
         }
@@ -2890,7 +2963,7 @@ UINT32 HTTPIntrnHeadersSend(P_HTTP_SESSION pHTTPSession,
         if((pHTTPSession->HttpFlags & HTTP_CLIENT_FLAG_USINGPROXY) != HTTP_CLIENT_FLAG_USINGPROXY)
         {
             nBytes = pHTTPSession->HttpUrl.UrlRequest.nLength;
-            if((nRetCode = HTTPIntrnSend(pHTTPSession,pHTTPSession->HttpUrl.UrlRequest.pParam,&nBytes)) != HTTP_CLIENT_SUCCESS)
+            if((nRetCode = HTTPIntrnRetrySend(pHTTPSession,pHTTPSession->HttpUrl.UrlRequest.pParam,nBytes)) != HTTP_CLIENT_SUCCESS)
             {   
                 break;
             }
@@ -2900,7 +2973,7 @@ UINT32 HTTPIntrnHeadersSend(P_HTTP_SESSION pHTTPSession,
         else
         {
             nBytes = strlen(pHTTPSession->HttpUrl.Url);
-            if((nRetCode = HTTPIntrnSend(pHTTPSession,pHTTPSession->HttpUrl.Url,&nBytes)) != HTTP_CLIENT_SUCCESS)
+            if((nRetCode = HTTPIntrnRetrySend(pHTTPSession,pHTTPSession->HttpUrl.Url,nBytes)) != HTTP_CLIENT_SUCCESS)
             {   
                 break;
             }
@@ -2913,7 +2986,7 @@ UINT32 HTTPIntrnHeadersSend(P_HTTP_SESSION pHTTPSession,
         strcat(RequestCmd,HTTP_CLIENT_DEFAULT_VER);
         strcat(RequestCmd,HTTP_CLIENT_CRLF);
         nBytes = strlen(RequestCmd);
-        if((nRetCode = HTTPIntrnSend(pHTTPSession,RequestCmd,&nBytes)) != HTTP_CLIENT_SUCCESS)  
+        if((nRetCode = HTTPIntrnRetrySend(pHTTPSession,RequestCmd,nBytes)) != HTTP_CLIENT_SUCCESS)  
         {
             break;
         }
@@ -2922,7 +2995,7 @@ UINT32 HTTPIntrnHeadersSend(P_HTTP_SESSION pHTTPSession,
         
         // Request headers
         nBytes = pHTTPSession->HttpHeaders.HeadersOut.nLength;
-        if((nRetCode = HTTPIntrnSend(pHTTPSession,pHTTPSession->HttpHeaders.HeadersOut.pParam,&nBytes)) != HTTP_CLIENT_SUCCESS)
+        if((nRetCode = HTTPIntrnRetrySend(pHTTPSession,pHTTPSession->HttpHeaders.HeadersOut.pParam,nBytes)) != HTTP_CLIENT_SUCCESS)
         {
             break;
         }
@@ -2941,7 +3014,7 @@ UINT32 HTTPIntrnHeadersSend(P_HTTP_SESSION pHTTPSession,
         
         // Request terminating CrLf
         nBytes = strlen(HTTP_CLIENT_CRLF);
-        if((nRetCode = HTTPIntrnSend(pHTTPSession,HTTP_CLIENT_CRLF,&nBytes)) != HTTP_CLIENT_SUCCESS)
+        if((nRetCode = HTTPIntrnRetrySend(pHTTPSession,HTTP_CLIENT_CRLF,nBytes)) != HTTP_CLIENT_SUCCESS)
         {
             break;
         }
@@ -3568,7 +3641,15 @@ UINT32 HTTPIntrnSessionReset (P_HTTP_SESSION pHTTPSession, BOOL EntireSession)
         
         pHTTPSession->HttpHeaders.HeadersOut.pParam = pHTTPSession->HttpHeaders.HeadersBuffer.pParam;
         // Set our state
-        pHTTPSession->HttpState = pHTTPSession->HttpState | HTTP_CLIENT_STATE_INIT;
+        pHTTPSession->HttpState = HTTP_CLIENT_STATE_INIT;
+        
+        if(pHTTPSession->HttpHeadersInfo.Connection == FALSE){
+            // Gracefully close the connection and set the socket as invalid
+            if(pHTTPSession->HttpConnection.HttpSocket != HTTP_INVALID_SOCKET)
+            {
+                HTTPIntrnConnectionClose(pHTTPSession);
+            }
+        }
         
         memset(&pHTTPSession->HttpHeadersInfo,0,sizeof(HTTP_HEADERS_INFO));
         if(pHTTPSession->HttpConnection.HttpSocket != HTTP_INVALID_SOCKET)

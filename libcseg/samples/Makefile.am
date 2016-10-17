@@ -5,13 +5,19 @@ AM_CPPFLAGS = -I$(srcdir)/../ -I$(srcdir)/../utils/http_client -I$(srcdir)
 
 
 
-noinst_PROGRAMS = HTTPClientSample ffmpeg_test
+noinst_PROGRAMS = HTTPClientSample ffmpeg_test HTTPClientSampleKeepalive
 
 HTTPClientSample_SOURCES = HTTPClientSample.h \
     HTTPClientSample.c
     
 
 HTTPClientSample_LDADD = $(builddir)/../libcseg.la
+
+HTTPClientSampleKeepalive_SOURCES = HTTPClientSampleKeepalive.h \
+    HTTPClientSampleKeepalive.c
+    
+
+HTTPClientSampleKeepalive_LDADD = $(builddir)/../libcseg.la
 
 
 ffmpeg_test_SOURCES = ffmpeg_test.c  \

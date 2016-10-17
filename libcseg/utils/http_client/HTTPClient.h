@@ -77,6 +77,8 @@ extern "C" {
 #define HTTP_STATUS_CONTINUE                        100 // Page continue message
 
 
+#define DNS_RESOLVE_CACHED_TIME                     7200  //cache dns result for 2 hour
+
     // MIN AMX macro 
 #define MIN(a,b) (((a) < (b)) ? (a) : (b))
 #define MAX(a,b) (((a) > (b)) ? (a) : (b))
@@ -213,6 +215,14 @@ extern "C" {
         UINT32              nSentHeaderBytes;       // Count of header bytes thhat ware sent
 
     }HTTP_COUNTERS;
+    
+    typedef struct _DNS_CACHE
+    {
+        CHAR    hostname[HTTP_CLIENT_MAX_URL_LENGTH];
+        UINT32  addr;
+        int64_t expire_time;
+        UINT16  port;
+    }DNS_CACHE;
 
     // HTTP Client Session data
     typedef struct _HTTP_REQUEST
@@ -228,6 +238,8 @@ extern "C" {
         HTTP_COUNTERS       HttpCounters;
         UINT32              HttpState;
         UINT32              HttpFlags;
+        DNS_CACHE           HttpNameCache;
+        
 #ifdef _HTTP_DEBUGGING_
         E_HTTPDebug         *pDebug;
 #endif
@@ -249,6 +261,8 @@ extern "C" {
 
     HTTP_SESSION_HANDLE     HTTPClientOpenRequest         (HTTP_CLIENT_SESSION_FLAGS Flags);
     UINT32                  HTTPClientCloseRequest        (HTTP_SESSION_HANDLE *pSession);
+    UINT32                  HTTPClientReset               (HTTP_SESSION_HANDLE pSession);
+    UINT32                  HTTPClientSetConnection       (HTTP_SESSION_HANDLE pSession, BOOL Connection);
     UINT32                  HTTPClientSetLocalConnection  (HTTP_SESSION_HANDLE pSession, UINT32 nPort);
     UINT32                  HTTPClientSetAuth             (HTTP_SESSION_HANDLE pSession, HTTP_AUTH_SCHEMA AuthSchema, void *pReserved);
     UINT32                  HTTPClientSetCredentials      (HTTP_SESSION_HANDLE pSession, CHAR *pUserName, CHAR *pPassword);
@@ -284,6 +298,7 @@ extern "C" {
     UINT32                  HTTPIntrnConnectionOpen       (P_HTTP_SESSION pHTTPSession);
     UINT32                  HTTPIntrnGetRemoteHeaders     (P_HTTP_SESSION pHTTPSession);
     UINT32                  HTTPIntrnGetRemoteChunkLength (P_HTTP_SESSION pHTTPSession);
+    UINT32                  HTTPIntrnRetrySend            (P_HTTP_SESSION pHTTPSession, CHAR *pData, UINT32 nLength);
     UINT32                  HTTPIntrnSend                 (P_HTTP_SESSION pHTTPSession, CHAR *pData,UINT32 *nLength);
     UINT32                  HTTPIntrnRecv                 (P_HTTP_SESSION pHTTPSession, CHAR *pData,UINT32 *nLength,BOOL PeekOnly);
     UINT32                  HTTPIntrnParseAuthHeader      (P_HTTP_SESSION pHTTPSession);

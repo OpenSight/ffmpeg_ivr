@@ -34,7 +34,8 @@ PRE_UNINSTALL = :
 POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
-noinst_PROGRAMS = HTTPClientSample$(EXEEXT) ffmpeg_test$(EXEEXT)
+noinst_PROGRAMS = HTTPClientSample$(EXEEXT) ffmpeg_test$(EXEEXT) \
+	HTTPClientSampleKeepalive$(EXEEXT)
 subdir = libcseg/samples
 DIST_COMMON = $(srcdir)/Makefile.am $(srcdir)/Makefile.in
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
@@ -55,6 +56,11 @@ HTTPClientSample_DEPENDENCIES = $(builddir)/../libcseg.la
 AM_V_lt = $(am__v_lt_$(V))
 am__v_lt_ = $(am__v_lt_$(AM_DEFAULT_VERBOSITY))
 am__v_lt_0 = --silent
+am_HTTPClientSampleKeepalive_OBJECTS =  \
+	HTTPClientSampleKeepalive.$(OBJEXT)
+HTTPClientSampleKeepalive_OBJECTS =  \
+	$(am_HTTPClientSampleKeepalive_OBJECTS)
+HTTPClientSampleKeepalive_DEPENDENCIES = $(builddir)/../libcseg.la
 am__dirstamp = $(am__leading_dot)dirstamp
 am_ffmpeg_test_OBJECTS = ffmpeg_test-ffmpeg_test.$(OBJEXT) \
 	auxiliary/ffmpeg_test-mpeg4audio.$(OBJEXT)
@@ -89,8 +95,10 @@ am__v_CCLD_0 = @echo "  CCLD  " $@;
 AM_V_GEN = $(am__v_GEN_$(V))
 am__v_GEN_ = $(am__v_GEN_$(AM_DEFAULT_VERBOSITY))
 am__v_GEN_0 = @echo "  GEN   " $@;
-SOURCES = $(HTTPClientSample_SOURCES) $(ffmpeg_test_SOURCES)
-DIST_SOURCES = $(HTTPClientSample_SOURCES) $(ffmpeg_test_SOURCES)
+SOURCES = $(HTTPClientSample_SOURCES) \
+	$(HTTPClientSampleKeepalive_SOURCES) $(ffmpeg_test_SOURCES)
+DIST_SOURCES = $(HTTPClientSample_SOURCES) \
+	$(HTTPClientSampleKeepalive_SOURCES) $(ffmpeg_test_SOURCES)
 ETAGS = etags
 CTAGS = ctags
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
@@ -234,6 +242,10 @@ HTTPClientSample_SOURCES = HTTPClientSample.h \
     HTTPClientSample.c
 
 HTTPClientSample_LDADD = $(builddir)/../libcseg.la
+HTTPClientSampleKeepalive_SOURCES = HTTPClientSampleKeepalive.h \
+    HTTPClientSampleKeepalive.c
+
+HTTPClientSampleKeepalive_LDADD = $(builddir)/../libcseg.la
 ffmpeg_test_SOURCES = ffmpeg_test.c  \
     auxiliary/get_bits.h \
     auxiliary/mpeg4audio.h  \
@@ -294,6 +306,9 @@ clean-noinstPROGRAMS:
 HTTPClientSample$(EXEEXT): $(HTTPClientSample_OBJECTS) $(HTTPClientSample_DEPENDENCIES) 
 	@rm -f HTTPClientSample$(EXEEXT)
 	$(AM_V_CCLD)$(LINK) $(HTTPClientSample_OBJECTS) $(HTTPClientSample_LDADD) $(LIBS)
+HTTPClientSampleKeepalive$(EXEEXT): $(HTTPClientSampleKeepalive_OBJECTS) $(HTTPClientSampleKeepalive_DEPENDENCIES) 
+	@rm -f HTTPClientSampleKeepalive$(EXEEXT)
+	$(AM_V_CCLD)$(LINK) $(HTTPClientSampleKeepalive_OBJECTS) $(HTTPClientSampleKeepalive_LDADD) $(LIBS)
 auxiliary/$(am__dirstamp):
 	@$(MKDIR_P) auxiliary
 	@: > auxiliary/$(am__dirstamp)
@@ -314,6 +329,7 @@ distclean-compile:
 	-rm -f *.tab.c
 
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/HTTPClientSample.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/HTTPClientSampleKeepalive.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ffmpeg_test-ffmpeg_test.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@auxiliary/$(DEPDIR)/ffmpeg_test-mpeg4audio.Po@am__quote@
 
