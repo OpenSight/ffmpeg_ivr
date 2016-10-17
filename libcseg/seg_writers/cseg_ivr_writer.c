@@ -38,7 +38,17 @@
 
 #define MSEC_TO_SEC(ms)   ((((int32_t)(ms)) + MSEC_PER_SEC - 1) / MSEC_PER_SEC)
 
-#define RAMDOM_SLEEP_MAX_MS     47
+#define RAMDOM_SLEEP_MAX_MS     27
+
+#define MAX_FILE_NAME 128
+#define MAX_URI_LEN 1024
+
+typedef struct IvrWriterPriv {
+    char ivr_rest_uri[MAX_URI_LEN];
+    HTTP_SESSION_HANDLE post_http_session;
+    HTTP_SESSION_HANDLE upload_http_session;
+    char last_filename[MAX_FILE_NAME];
+} IvrWriterPriv;
 
 static void random_msleep()
 {
@@ -93,7 +103,8 @@ static inline int http_need_retry(int ret)
 
 }
 
-static int http_post(char * http_uri, 
+static int http_post(HTTP_SESSION_HANDLE session,
+                     char * http_uri, 
                      int32_t io_timeout,  //in milli-seconds 
                      char * post_content_type, 
                      char * post_data, int post_len,
@@ -103,37 +114,28 @@ static int http_post(char * http_uri,
 {
     int ret = 0;
     HTTP_CLIENT             HTTPClient;
-    HTTP_SESSION_HANDLE     pHTTP = 0;
-    uint32_t                  nSize = 0, nTotal = 0;
+    uint32_t                  nSize = 0, nTotal = 0;  
     
     if(retries <= 0){
         retries = HTTP_DEFAULT_RETRY_NUM;
     }    
     
     while(retries-- > 0){
-        pHTTP = 0;
         memset(&HTTPClient, 0, sizeof(HTTP_CLIENT));
         ret = HTTP_CLIENT_SUCCESS;
-    
-    
-        pHTTP = HTTPClientOpenRequest(0);
-        if(!pHTTP){
-            ret = HTTP_CLIENT_ERROR_NO_MEMORY;    
-            break;        
-        }    
 
-        if((ret = HTTPClientSetVerb(pHTTP,VerbPost)) != HTTP_CLIENT_SUCCESS)
+        if((ret = HTTPClientSetVerb(session,VerbPost)) != HTTP_CLIENT_SUCCESS)
         {
             break;
         }    
         
         if(post_content_type != NULL){
-            if((ret = HTTPClientAddRequestHeaders(pHTTP, "Content-Type", post_content_type, 0)) != HTTP_CLIENT_SUCCESS)
+            if((ret = HTTPClientAddRequestHeaders(session, "Content-Type", post_content_type, 0)) != HTTP_CLIENT_SUCCESS)
             {
                 break;
             }
         }else{
-            if((ret = HTTPClientAddRequestHeaders(pHTTP, 
+            if((ret = HTTPClientAddRequestHeaders(session, 
                                                   "Content-Type", 
                                                   "application/x-www-form-urlencoded", 0)) != HTTP_CLIENT_SUCCESS)
             {
@@ -141,29 +143,31 @@ static int http_post(char * http_uri,
             }        
         }      
 
-        if((ret = HTTPClientSendRequest(pHTTP, http_uri, post_data,
+        if((ret = HTTPClientSendRequest(session, http_uri, post_data,
                     post_len,TRUE, MSEC_TO_SEC(io_timeout), 0)) != HTTP_CLIENT_SUCCESS)
         {
             if(http_need_retry(ret)){
                 //cleanup the current HTTP client session hanle
-                HTTPClientCloseRequest(&pHTTP);
-                pHTTP = 0;
+                HTTPClientSetConnection(session, FALSE);
+                HTTPClientReset(session);
+                cseg_log(CSEG_LOG_ERROR,  
+                         "[cseg_ivr_writer] HTTP POST HTTPClientSendRequest failed(%d), retry\n", ret);  
                 random_msleep();
                 continue;
             }else{
                 break;
-            }
-                
-        }     
-    
+            }                
+        }        
 
         // Retrieve the the headers and analyze them
-        if((ret = HTTPClientRecvResponse(pHTTP,MSEC_TO_SEC(io_timeout))) != HTTP_CLIENT_SUCCESS)
+        if((ret = HTTPClientRecvResponse(session, MSEC_TO_SEC(io_timeout))) != HTTP_CLIENT_SUCCESS)
         {
             if(http_need_retry(ret)){//check if need retry
                 //cleanup the current HTTP client session hanle
-                HTTPClientCloseRequest(&pHTTP);
-                pHTTP = 0;
+                HTTPClientSetConnection(session, FALSE);
+                HTTPClientReset(session);
+                cseg_log(CSEG_LOG_ERROR,  
+                         "[cseg_ivr_writer] HTTP POST HTTPClientRecvResponse failed(%d), retry\n", ret); 
                 random_msleep();
                 continue;
             }else{
@@ -171,11 +175,10 @@ static int http_post(char * http_uri,
             }
         }
         
-        HTTPClientGetInfo(pHTTP, &HTTPClient);
+        HTTPClientGetInfo(session, &HTTPClient);
         if(status_code){
             *status_code = HTTPClient.HTTPStatusCode;
-        }    
-        
+        }            
 
         // Get the data until we get an error or end of stream code
         // printf("Each dot represents %d bytes:\n",HTTP_BUFFER_SIZE );
@@ -193,7 +196,7 @@ static int http_post(char * http_uri,
                 nSize = (*buf_size) - nTotal;   
 
                 // Get the data
-                ret = HTTPClientReadData(pHTTP,result_buf+nTotal,nSize, MSEC_TO_SEC(io_timeout), &nSize);
+                ret = HTTPClientReadData(session,result_buf+nTotal,nSize, MSEC_TO_SEC(io_timeout), &nSize);
                 nTotal += nSize;
                 if(ret == HTTP_CLIENT_EOS){
                     ret = HTTP_CLIENT_SUCCESS;
@@ -201,7 +204,6 @@ static int http_post(char * http_uri,
                 }else if(ret != HTTP_CLIENT_SUCCESS){
                     break;  //error break;
                 }
-
             }
             
             if(ret == HTTP_CLIENT_SUCCESS){
@@ -209,8 +211,10 @@ static int http_post(char * http_uri,
             }else{      
                 if(http_need_retry(ret)){
                     //cleanup the current HTTP client session hanle
-                    HTTPClientCloseRequest(&pHTTP);
-                    pHTTP = 0;
+                    HTTPClientSetConnection(session, FALSE);
+                    HTTPClientReset(session);
+                    cseg_log(CSEG_LOG_ERROR,  
+                         "[cseg_ivr_writer] HTTP POST HTTPClientReadData failed(%d), retry\n", ret); 
                     random_msleep();
                     continue;
                 }else{
@@ -218,6 +222,10 @@ static int http_post(char * http_uri,
                 }            
             }//if(ret != HTTP_CLIENT_SUCCESS){
                 
+        }else{
+            ret = HTTP_CLIENT_UNKNOWN_ERROR;
+            break;
+            
         }//if(result_buf != NULL && buf_size != NULL && (*buf_size) != 0){
         
         break; //success, go through
@@ -225,21 +233,20 @@ static int http_post(char * http_uri,
     }//while(retries-- > 0){
         
 fail:    
-    
-    if(pHTTP){
-        HTTPClientCloseRequest(&pHTTP);
-        pHTTP = 0;
-    }
-
     if(ret){
         cseg_log(CSEG_LOG_ERROR,  "[cseg_ivr_writer] HTTP POST failed(%d)\n", ret);  
         ret = CSEG_ERROR(EIO);
+        HTTPClientSetConnection(session, FALSE);  //close the socket when error
     }
+    
+    HTTPClientReset(session); //reset the session for next operation
   
     return ret;
 }
 
-static int http_put(char * http_uri, 
+#define DUMMY_RESP_BUF_LEN   256
+static int http_put(HTTP_SESSION_HANDLE session,
+                    char * http_uri, 
                     int32_t io_timeout,  //in milli-seconds 
                     char * content_type, 
                     CachedSegment * segment,
@@ -249,39 +256,32 @@ static int http_put(char * http_uri,
 
     int ret = 0;
     HTTP_CLIENT             HTTPClient;
-    HTTP_SESSION_HANDLE     pHTTP = 0;
     int32_t                  len = 0;
+    uint32_t                  nSize = 0, nTotal = 0;
     fragment *cur_frag;    
     char segment_size_str[32];
-    
+    char dummy_resp_buf[DUMMY_RESP_BUF_LEN];    
     
     if(retries <= 0){
         retries = HTTP_DEFAULT_RETRY_NUM;
     }
 
     while(retries-- > 0){
-        pHTTP = 0;
         memset(&HTTPClient, 0, sizeof(HTTP_CLIENT));
         ret = HTTP_CLIENT_SUCCESS;
     
-        pHTTP = HTTPClientOpenRequest(0);
-        if(!pHTTP){
-            ret = HTTP_CLIENT_ERROR_NO_MEMORY;    
-            break;       
-        }
-    
-        if((ret = HTTPClientSetVerb(pHTTP,VerbPut)) != HTTP_CLIENT_SUCCESS)
+        if((ret = HTTPClientSetVerb(session,VerbPut)) != HTTP_CLIENT_SUCCESS)
         {
             break;  
         }    
     
         if(content_type != NULL){
-            if((ret = HTTPClientAddRequestHeaders(pHTTP, "Content-Type", content_type, 0)) != HTTP_CLIENT_SUCCESS)
+            if((ret = HTTPClientAddRequestHeaders(session, "Content-Type", content_type, 0)) != HTTP_CLIENT_SUCCESS)
             {
                 break;  
             }
         }else{
-            if((ret = HTTPClientAddRequestHeaders(pHTTP, 
+            if((ret = HTTPClientAddRequestHeaders(session, 
                                                   "Content-Type", 
                                                   "application/x-www-form-urlencoded", 0)) != HTTP_CLIENT_SUCCESS)
             {
@@ -292,19 +292,20 @@ static int http_put(char * http_uri,
         memset(segment_size_str,0, 32);
         IToA(segment_size_str, (int)segment->size);
         
-        if((ret = HTTPClientAddRequestHeaders(pHTTP, "Content-Length", segment_size_str, 0)) != HTTP_CLIENT_SUCCESS)
+        if((ret = HTTPClientAddRequestHeaders(session, "Content-Length", segment_size_str, 0)) != HTTP_CLIENT_SUCCESS)
         {
             break;  
         }    
         
-
-        if((ret = HTTPClientSendRequest(pHTTP, http_uri, NULL,
+        if((ret = HTTPClientSendRequest(session, http_uri, NULL,
                     0, FALSE, MSEC_TO_SEC(io_timeout), 0)) != HTTP_CLIENT_SUCCESS)
         {
             if(http_need_retry(ret)){
                 //cleanup the current HTTP client session hanle
-                HTTPClientCloseRequest(&pHTTP);
-                pHTTP = 0;
+                HTTPClientSetConnection(session, FALSE);
+                HTTPClientReset(session);
+                cseg_log(CSEG_LOG_ERROR,  
+                         "[cseg_ivr_writer] HTTP PUT HTTPClientSendRequest failed(%d), retry\n", ret);  
                 random_msleep();
                 continue;
             }else{
@@ -325,7 +326,7 @@ static int http_put(char * http_uri,
                 break;
             }
             
-            ret  = HTTPClientWriteData(pHTTP, cur_frag->buffer, to_write, MSEC_TO_SEC(io_timeout));
+            ret  = HTTPClientWriteData(session, cur_frag->buffer, to_write, MSEC_TO_SEC(io_timeout));
             if(ret != HTTP_CLIENT_SUCCESS){
                 break;
             }
@@ -337,54 +338,86 @@ static int http_put(char * http_uri,
         if(ret != HTTP_CLIENT_SUCCESS){
             if(http_need_retry(ret)){
                 //cleanup the current HTTP client session hanle
-                HTTPClientCloseRequest(&pHTTP);
-                pHTTP = 0;
+                HTTPClientSetConnection(session, FALSE);
+                HTTPClientReset(session);
+                cseg_log(CSEG_LOG_ERROR,  
+                         "[cseg_ivr_writer] HTTP PUT HTTPClientWriteData failed(%d), retry\n", ret);  
                 random_msleep();
                 continue;
             }else{
                 break;
             }  
-        }
-    
+        }    
     
         // Retrieve the the headers and analyze them
-        if((ret = HTTPClientRecvResponse(pHTTP,io_timeout)) != HTTP_CLIENT_SUCCESS)
+        if((ret = HTTPClientRecvResponse(session, MSEC_TO_SEC(io_timeout))) != HTTP_CLIENT_SUCCESS)
         {
             if(http_need_retry(ret)){
                 //cleanup the current HTTP client session hanle
-                HTTPClientCloseRequest(&pHTTP);
-                pHTTP = 0;
+                HTTPClientSetConnection(session, FALSE);
+                HTTPClientReset(session);
+                cseg_log(CSEG_LOG_ERROR,  
+                         "[cseg_ivr_writer] HTTP PUT HTTPClientRecvResponse failed(%d), retry\n", ret);  
                 random_msleep();
                 continue;
             }else{
                 break;
             }  
         }
-        HTTPClientGetInfo(pHTTP, &HTTPClient);
+        HTTPClientGetInfo(session, &HTTPClient);
         if(status_code){
             *status_code = HTTPClient.HTTPStatusCode;
-        }    
+        }  
+  
+        nTotal = 0;
+        ret = HTTP_CLIENT_SUCCESS;
+        while(nTotal < HTTPClient.TotalResponseBodyLength)
+        {                   
+            // Set the size of our buffer
+            nSize = DUMMY_RESP_BUF_LEN;   
+
+            // Get the data
+            ret = HTTPClientReadData(session, dummy_resp_buf,nSize, MSEC_TO_SEC(io_timeout), &nSize);
+            nTotal += nSize;
+            if(ret == HTTP_CLIENT_EOS){
+                ret = HTTP_CLIENT_SUCCESS;
+                break;  // receive complete,
+            }else if(ret != HTTP_CLIENT_SUCCESS){
+                break;  //error break;
+            }
+        }
+            
+        if(ret != HTTP_CLIENT_SUCCESS){    
+            if(http_need_retry(ret)){
+                //cleanup the current HTTP client session hanle
+                HTTPClientSetConnection(session, FALSE);
+                HTTPClientReset(session);
+                cseg_log(CSEG_LOG_ERROR,  
+                         "[cseg_ivr_writer] HTTP PUT HTTPClientReadData failed(%d), retry\n", ret); 
+                random_msleep();
+                continue;
+            }else{
+                break;
+            }            
+        }//if(ret != HTTP_CLIENT_SUCCESS){  
      
         break; //success, go through
     }//while(retries-- > 0){
     
 fail:    
-    
-    if(pHTTP){
-        HTTPClientCloseRequest(&pHTTP);
-        pHTTP = 0;
-    }
-
     if(ret){
         cseg_log(CSEG_LOG_ERROR,  "[cseg_ivr_writer] HTTP PUT failed(%d)\n", ret);  
         ret = CSEG_ERROR(EIO);
+        HTTPClientSetConnection(session, FALSE);  //close the socket when error
     }
+    
+    HTTPClientReset(session); //reset the session for next operation
   
     return ret;
 }
 
 
-static int create_file(char * ivr_rest_uri, 
+static int create_file(IvrWriterPriv * priv,
                        int32_t io_timeout, 
                        CachedSegment *segment, 
                        char * filename, int filename_size,
@@ -410,14 +443,25 @@ static int create_file(char * ivr_rest_uri,
     memset(http_response_json, 0, MAX_HTTP_RESULT_SIZE);
     
     //prepare post_data
-    sprintf(post_data_str, 
-            "op=create&content_type=video%%2Fmp2t&size=%d&start=%.6f&duration=%.6f",
-            segment->size,
-            segment->start_ts, 
-            segment->duration);
-        
+//    if(strlen(priv->last_filename) == 0){
+        sprintf(post_data_str,
+                "op=create&content_type=video%%2Fmp2t&size=%d&start=%.6f&duration=%.6f",
+                segment->size,
+                segment->start_ts, 
+                segment->duration);                
+#if 0
+    }else{
+        sprintf(post_data_str, 
+                "op=create&content_type=video%%2Fmp2t&size=%d&start=%.6f&duration=%.6f&last_name=%s",
+                segment->size,
+                segment->start_ts, 
+                segment->duration,
+                priv->last_filename);          
+    }
+#endif        
     //issue HTTP request
-    ret = http_post(ivr_rest_uri, 
+    ret = http_post(priv->post_http_session,
+                    priv->ivr_rest_uri, 
                     io_timeout,  //in milli-seconds
                     NULL, 
                     post_data_str, strlen(post_data_str), 
@@ -452,7 +496,7 @@ static int create_file(char * ivr_rest_uri,
             json_root = cJSON_Parse(http_response_json);
             if(json_root== NULL){
                 cseg_log(CSEG_LOG_ERROR, "[cseg_ivr_writer] HTTP create file (%s) status code(%d):%s\n", 
-                       ivr_rest_uri, status_code, "reason unknown");
+                       priv->ivr_rest_uri, status_code, "reason unknown");
             }else{
                 json_info = cJSON_GetObjectItem(json_root, IVR_ERR_INFO_FIELD_KEY);
                 if(json_info && json_info->type == cJSON_String && json_info->valuestring){            
@@ -466,7 +510,6 @@ static int create_file(char * ivr_rest_uri,
         
     }//if(status_code >= 200 && status_code < 300){
     
-
 failed:
     if(json_root){
         cJSON_Delete(json_root); 
@@ -477,13 +520,15 @@ failed:
     return ret;
 }
 
-static int upload_file(CachedSegment *segment, 
+static int upload_file(IvrWriterPriv * priv,
+                       CachedSegment *segment, 
                        int32_t io_timeout,  //in milli-seconds
                        char * file_uri)
 {
     int status_code = 200;
     int ret = 0;  
-    ret = http_put(file_uri, io_timeout, "video/mp2t",
+    ret = http_put(priv->upload_http_session, 
+                   file_uri, io_timeout, "video/mp2t",
                    segment,
                    HTTP_DEFAULT_RETRY_NUM,
                    &status_code);
@@ -503,7 +548,7 @@ fail:
     return ret;
 }
 
-static int save_file(char * ivr_rest_uri,
+static int save_file( IvrWriterPriv * priv,
                       int32_t io_timeout,  //in milli-seconds
                       CachedSegment *segment, 
                       char * filename,
@@ -535,7 +580,8 @@ static int save_file(char * ivr_rest_uri,
     }
 
     //issue HTTP request
-    ret = http_post(ivr_rest_uri, 
+    ret = http_post(priv->post_http_session,
+                    priv->ivr_rest_uri, 
                     io_timeout,
                     NULL, 
                     post_data_str, strlen(post_data_str), 
@@ -553,7 +599,7 @@ static int save_file(char * ivr_rest_uri,
             json_root = cJSON_Parse(http_response_json);
             if(json_root== NULL){
                 cseg_log(CSEG_LOG_ERROR,  "[cseg_ivr_writer] HTTP save file (%s) status code(%d):%s\n", 
-                       ivr_rest_uri, status_code, "reason unknown");                     
+                       priv->ivr_rest_uri, status_code, "reason unknown");                     
             }else{
                 json_info = cJSON_GetObjectItem(json_root, IVR_ERR_INFO_FIELD_KEY);
                 if(json_info && json_info->type == cJSON_String && json_info->valuestring){
@@ -578,24 +624,25 @@ failed:
     return ret;
 
 }
-#define MAX_FILE_NAME 256
-#define MAX_URI_LEN 1024
+
 
 
 static int ivr_init(CachedSegmentContext *cseg)
 {
     int ret = 0; 
     char *p;
+    IvrWriterPriv * priv;
    
-    cseg->writer_priv = cseg_malloc(MAX_URI_LEN);
-    if(cseg->writer_priv == NULL){
+    priv = (IvrWriterPriv *)cseg_malloc(sizeof(IvrWriterPriv));
+    if(priv == NULL){
         ret = CSEG_ERROR(ENOMEM);
         goto fail;
     }
-    memset(cseg->writer_priv, 0, MAX_URI_LEN);
-    strcpy((char *)cseg->writer_priv, "http");
+    memset(priv, 0, sizeof(IvrWriterPriv));
     
     
+    // ivr_rest_uri
+    strcpy((char *)priv->ivr_rest_uri, "http");    
     if(cseg->filename == NULL || strlen(cseg->filename) == 0){
         ret = CSEG_ERROR(EINVAL);
         cseg_log(CSEG_LOG_ERROR,  "[cseg_ivr_writer] http filename absent\n");          
@@ -610,19 +657,33 @@ static int ivr_init(CachedSegmentContext *cseg)
 
     p = strchr(cseg->filename, ':');  
     if(p){
-        strncat((char *)cseg->writer_priv, p, (MAX_URI_LEN - 5));
+        strncat((char *)priv->ivr_rest_uri, p, (MAX_URI_LEN - 5));
     }else{
         ret = CSEG_ERROR(EINVAL);
         cseg_log(CSEG_LOG_ERROR,  "[cseg_ivr_writer] filename malformat\n");
         goto fail;
     }    
     
+    //http sessions
+    priv->post_http_session = HTTPClientOpenRequest(HTTP_CLIENT_FLAG_KEEP_ALIVE);
+    priv->upload_http_session = HTTPClientOpenRequest(HTTP_CLIENT_FLAG_KEEP_ALIVE);
+    
+    
+    cseg->writer_priv = priv;
+    
     return 0;
     
 fail:
-    if(cseg->writer_priv != NULL){
-        cseg_free(cseg->writer_priv);
-        cseg->writer_priv = NULL;
+ 
+    if(priv != NULL){
+        if(priv->post_http_session){
+            HTTPClientCloseRequest(&priv->post_http_session);
+        }
+        if(priv->upload_http_session){
+            HTTPClientCloseRequest(&priv->upload_http_session);
+        }        
+        cseg_free(priv);
+        priv = NULL;
     }
     return ret;    
     
@@ -632,25 +693,21 @@ fail:
 
 static int ivr_write_segment(CachedSegmentContext *cseg, CachedSegment *segment)
 {
-    char * ivr_rest_uri = (char *)cseg->writer_priv;
+    IvrWriterPriv * priv = (IvrWriterPriv * )cseg->writer_priv;    
+
     char file_uri[MAX_URI_LEN];
     char filename[MAX_FILE_NAME];
     int ret = 0;
     
-    if(ivr_rest_uri == NULL ||strlen(ivr_rest_uri) == 0){
-        ret = CSEG_ERROR(EINVAL);
-        cseg_log(CSEG_LOG_ERROR,  "[cseg_ivr_writer] http uri absent, cseg_ivr_writer may be un-inited\n");          
-        goto fail;          
-    }
-
     //get URI of the file for segment
-    ret = create_file(ivr_rest_uri, 
+    ret = create_file(priv, 
                       cseg->io_timeout,
                       segment, 
                       filename, MAX_FILE_NAME,
                       file_uri, MAX_URI_LEN);
                       
     if(ret){
+        priv->last_filename[0] = 0;
         goto fail;
     }
    
@@ -658,27 +715,29 @@ static int ivr_write_segment(CachedSegmentContext *cseg, CachedSegment *segment)
         ret = 1; //cannot upload at the moment
     }else{    
         //upload segment to the file URI
-        ret = upload_file(segment, 
+        ret = upload_file(priv,
+                          segment, 
                           cseg->io_timeout,
                           file_uri);                      
         if(ret == 0){
             //save the file info to IVR db
-            ret = save_file(ivr_rest_uri, 
+            ret = save_file(priv, 
                             cseg->io_timeout,
                             segment, filename, 1);
+            strcpy(priv->last_filename, filename);
 
         }else{
             //fail the file, remove it from IVR
-            ret = save_file(ivr_rest_uri, 
+            ret = save_file(priv, 
                             cseg->io_timeout,
                             segment, filename, 0);
+            priv->last_filename[0] = 0;
     
         }//if(ret == 0){
-            
+        
         if(ret){
             goto fail;
-        } 
-        
+        }         
     }  
 
 fail:
@@ -688,10 +747,22 @@ fail:
 
 static void ivr_uninit(CachedSegmentContext *cseg)
 {
-    if(cseg->writer_priv != NULL){
-        cseg_free(cseg->writer_priv);
-        cseg->writer_priv = NULL;
-    }    
+    IvrWriterPriv * priv = (IvrWriterPriv * )cseg->writer_priv;
+    if(priv != NULL){
+        if(strlen(priv->last_filename) != 0){
+            //save the last file
+            //????
+        }
+        if(priv->post_http_session){
+            HTTPClientCloseRequest(&priv->post_http_session);
+        }
+        if(priv->upload_http_session){
+            HTTPClientCloseRequest(&priv->upload_http_session);
+        }        
+        cseg_free(priv);  
+        cseg->writer_priv = NULL;      
+    } 
+ 
     //curl_global_cleanup();
 }
 
