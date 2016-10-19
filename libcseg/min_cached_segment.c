@@ -449,12 +449,13 @@ static void * consumer_routine(void *arg)
         uint32_t queue_len = 0; 
         
         //try write out all segment in cached list
-        while(cseg->consumer_active && (segment = cseg->cached_list.first) != NULL){            
-            ret = 0;
+        while(cseg->consumer_active && (segment = cseg->cached_list.first) != NULL){          
             queue_len = cseg->cached_list.seg_num;
+            ret = 0;
             if(cseg->writer != NULL && cseg->writer->write_segment != NULL){                  
                 pthread_mutex_unlock(&cseg->mutex);
                 //because there is only one comsumer, the first segment is safe to access without lock
+                //writer may cost much time to submit the segments
                 ret = cseg->writer->write_segment(cseg, segment, queue_len, &(cseg->consumer_active));
                 pthread_mutex_lock(&cseg->mutex);
             } 
@@ -503,44 +504,13 @@ static void * consumer_routine(void *arg)
         
     }//while(cseg->consumer_active){
     pthread_mutex_unlock(&cseg->mutex);
-    
-#if 0    
-    //flush all the cached segment 
-    //because cseg->consumer_active is 0 which means no producer existed now, 
-    //we don't need lock any more
-    while((segment = get_segment_list(&(cseg->cached_list))) != NULL){
-        //call writer's method
-        ret = 0;
-        uint32_t queue_len = cseg->
-        if(cseg->writer != NULL && cseg->writer->write_segment != NULL){                    
-            ret = cseg->writer->write_segment(cseg, segment);
-        }
-        cached_segment_reset(segment);          
-        put_segment_list(&(cseg->free_list), segment);         
-        
-        if(ret < 0){
-            //error  
-            cseg->consumer_exit_code = ret;
-            break;                
-        }else if(ret == 0){
-            //successful
-            
-        }else if(ret == 1){
-            //should keep in fifo  
-            break;
-        }else{
-            cseg->consumer_exit_code = CSEG_ERROR(EINVAL);
-            break;   
-        }
-    }
-#endif    
+
     return NULL;    
 }
 
 
 static int cseg_start(CachedSegmentContext *cseg)
 {
-//    char *filename;
     int err = 0;
     CachedSegment * segment = NULL;
     
@@ -749,11 +719,9 @@ int cseg_write_packet(CachedSegmentContext *cseg, av_packet_t *pkt)
     int64_t end_pts = cseg->recording_time * cseg->number;
     int is_ref_pkt = 1;
     int ret, can_split = 1;
-    int stream_index = 0;
+    int stream_index = pkt->av_stream_index;
 //    int i;
-
-    stream_index = pkt->av_stream_index;
-    
+   
     if(cseg->consumer_exit_code){
         //consumer error
 /*
@@ -822,26 +790,27 @@ int cseg_write_packet(CachedSegmentContext *cseg, av_packet_t *pkt)
 
     if (can_split && ((pkt->pts - cseg->start_pts) >= end_pts)) {
         
-        ts_muxer_write_packet(cseg->ts_muxer, NULL);
-
+        
 /*        
         printf("pts:%lld, start_pts:%lld, end_pts:%lld, split_end_pts:%lld\n",
                (long long)pkt->pts, (long long)cseg->start_pts, (long long)cseg->end_pts, (long long)end_pts);
 */
         // finished the current segment
-        do {
+        do{
             int64_t cur_segment_size = 0;
             
-            ts_muxer_set_avio_context(cseg->ts_muxer, NULL, NULL);
+            ts_muxer_write_packet(cseg->ts_muxer, NULL);
                 
+            ts_muxer_set_avio_context(cseg->ts_muxer, NULL, NULL);
+                    
             cur_segment_size = cseg->cur_segment->size;
 
             ret = append_cur_segment(cseg); // lose the control of cseg->cur_segment
-            if (ret < 0)
-                return ret;                
+            if (ret < 0){
+                return ret;
+            }
             cseg->start_pos += cur_segment_size;
         }while(0);
-        
        
         //init new segment
         ret = cseg_start(cseg);
@@ -870,49 +839,23 @@ void release_cseg_muxer(CachedSegmentContext *cseg)
     
     if(cseg == NULL){
         return;
-    }
+    }    
     
-    ts_muxer_write_packet(cseg->ts_muxer, NULL);
     
     // flush the last segment
     do{
-//        double seg_start_ts;
-//        int64_t cur_segment_size = 0;
-//        int is_cached_list_full = 0;
+        ts_muxer_write_packet(cseg->ts_muxer, NULL); //flush muxer to IO context
 
         ts_muxer_set_avio_context(cseg->ts_muxer, NULL, NULL);
         
         pthread_mutex_lock(&cseg->mutex);
-#if 0
-        if(cseg->cached_list.seg_num >= cseg->max_nb_segments){
-#endif            
-            if(cseg->cur_segment != NULL){
-                cached_segment_reset(cseg->cur_segment);
-                put_segment_list(&(cseg->free_list), cseg->cur_segment);
-                cseg->cur_segment = NULL;                
-            }
-            pthread_mutex_unlock(&cseg->mutex); 
-#if 0
-        }else if(cseg->number <= 1){
-            //Jam(2016-07-12): if cseg->number equals 1, 
-            // means the current segment is the first segment and has not finished,
-            // don't write this single unfinished segment to avoid record fragmentation
-
-            if(cseg->cur_segment != NULL){
-                cached_segment_reset(cseg->cur_segment);
-                put_segment_list(&(cseg->free_list), cseg->cur_segment);
-                cseg->cur_segment = NULL;                
-            }
-            pthread_mutex_unlock(&cseg->mutex);   
-            cseg_log(CSEG_LOG_ERROR,
-                    "drop the current single unfinished segment\n");           
-
-        }else{
-            
-            pthread_mutex_unlock(&cseg->mutex);  
-            append_cur_segment(cseg); // lose the control of cseg->cur_segment            
+        
+        if(cseg->cur_segment != NULL){
+            cached_segment_reset(cseg->cur_segment);            
+            put_segment_list(&(cseg->free_list), cseg->cur_segment);
+            cseg->cur_segment = NULL;                
         }
-#endif
+        pthread_mutex_unlock(&cseg->mutex); 
     }while(0);    //do{
           
     if(cseg->consumer_thread_id != 0){
@@ -955,7 +898,6 @@ void release_cseg_muxer(CachedSegmentContext *cseg)
     cseg_free(cseg);
 
 }
-
 
 void * get_cseg_muxer_private(CachedSegmentContext *cseg)
 {
