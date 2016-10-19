@@ -443,22 +443,21 @@ static int create_file(IvrWriterPriv * priv,
     memset(http_response_json, 0, MAX_HTTP_RESULT_SIZE);
     
     //prepare post_data
-//    if(strlen(priv->last_filename) == 0){
+    if(strlen(priv->last_filename) == 0){
         sprintf(post_data_str,
                 "op=create&content_type=video%%2Fmp2t&size=%d&start=%.6f&duration=%.6f",
                 segment->size,
                 segment->start_ts, 
-                segment->duration);                
-#if 0
+                segment->duration);  
     }else{
         sprintf(post_data_str, 
-                "op=create&content_type=video%%2Fmp2t&size=%d&start=%.6f&duration=%.6f&last_name=%s",
+                "op=create&content_type=video%%2Fmp2t&size=%d&start=%.6f&duration=%.6f&last_file_name=%s",
                 segment->size,
                 segment->start_ts, 
                 segment->duration,
                 priv->last_filename);          
     }
-#endif        
+      
     //issue HTTP request
     ret = http_post(priv->post_http_session,
                     priv->ivr_rest_uri, 
@@ -550,7 +549,6 @@ fail:
 
 static int save_file( IvrWriterPriv * priv,
                       int32_t io_timeout,  //in milli-seconds
-                      CachedSegment *segment, 
                       char * filename,
                       int success)
 {
@@ -566,17 +564,9 @@ static int save_file( IvrWriterPriv * priv,
     
     //prepare post_data
     if(success){
-        sprintf(post_data_str, "op=save&name=%s&size=%d&start=%.6f&duration=%.6f",
-                filename,
-                segment->size,
-                segment->start_ts, 
-                segment->duration);
+        sprintf(post_data_str, "op=save&name=%s", filename);
     }else{
-        sprintf(post_data_str, "op=fail&name=%s&size=%d&start=%.6f&duration=%.6f",
-                filename,
-                segment->size,
-                segment->start_ts, 
-                segment->duration);        
+        sprintf(post_data_str, "op=fail&name=%s", filename);        
     }
 
     //issue HTTP request
@@ -710,7 +700,10 @@ static int ivr_write_segment(CachedSegmentContext *cseg, CachedSegment *segment)
         priv->last_filename[0] = 0;
         goto fail;
     }
-   
+    
+    //clear filename after create
+    priv->last_filename[0] = 0;
+    
     if(strlen(filename) == 0 || strlen(file_uri) == 0){
         ret = 1; //cannot upload at the moment
     }else{    
@@ -721,16 +714,14 @@ static int ivr_write_segment(CachedSegmentContext *cseg, CachedSegment *segment)
                           file_uri);                      
         if(ret == 0){
             //save the file info to IVR db
-            ret = save_file(priv, 
-                            cseg->io_timeout,
-                            segment, filename, 1);
+            //ret = save_file(priv, 
+            //                cseg->io_timeout,
+            //                segment, filename, 1);
             strcpy(priv->last_filename, filename);
 
         }else{
             //fail the file, remove it from IVR
-            ret = save_file(priv, 
-                            cseg->io_timeout,
-                            segment, filename, 0);
+            ret = save_file(priv, cseg->io_timeout, filename, 0);  
             priv->last_filename[0] = 0;
     
         }//if(ret == 0){
@@ -751,7 +742,8 @@ static void ivr_uninit(CachedSegmentContext *cseg)
     if(priv != NULL){
         if(strlen(priv->last_filename) != 0){
             //save the last file
-            //????
+            save_file(priv, cseg->io_timeout, priv->last_filename, 1);   
+            priv->last_filename[0] = 0;
         }
         if(priv->post_http_session){
             HTTPClientCloseRequest(&priv->post_http_session);
