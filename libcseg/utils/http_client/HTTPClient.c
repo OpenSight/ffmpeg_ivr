@@ -653,10 +653,11 @@ UINT32 HTTPClientSendRequest (HTTP_SESSION_HANDLE pSession,
         }
         
         // Add the "User-Agent" header
-        if((nRetCode = HTTPIntrnHeadersAdd(pHTTPSession,"User-Agent",10,HTTP_CLIENT_DEFAULT_AGENT,strlen(HTTP_CLIENT_DEFAULT_AGENT)))!= HTTP_CLIENT_SUCCESS)
-        {
-            break;
-        }
+//Jam: nginx would close the keep-alive for this agent        
+//        if((nRetCode = HTTPIntrnHeadersAdd(pHTTPSession,"User-Agent",10,HTTP_CLIENT_DEFAULT_AGENT,strlen(HTTP_CLIENT_DEFAULT_AGENT)))!= HTTP_CLIENT_SUCCESS)
+//        {
+//            break;
+//        }
         // Add the "Keep-Alive" header (if requested by the caller)
         if((pHTTPSession->HttpFlags & HTTP_CLIENT_FLAG_KEEP_ALIVE) == HTTP_CLIENT_FLAG_KEEP_ALIVE)
         {
