@@ -398,7 +398,8 @@ int append_cur_segment(CachedSegmentContext *cseg)
     cseg->cur_segment = NULL;
        
     if(segment->start_ts <= 0.0 ||
-       segment->duration < 1){
+       segment->duration < 1 || 
+       segment->size <= 0){
         //segment is invalid
         recycle_free_segment(cseg, segment);
         return 0;
@@ -444,15 +445,17 @@ static void * consumer_routine(void *arg)
     
     pthread_mutex_lock(&cseg->mutex);
     while(cseg->consumer_active){
-        int keep_seg_num = 0;         
+        int keep_seg_num = 0; 
+        uint32_t queue_len = 0; 
         
         //try write out all segment in cached list
-        while((segment = cseg->cached_list.first) != NULL){            
+        while(cseg->consumer_active && (segment = cseg->cached_list.first) != NULL){            
             ret = 0;
-            if(cseg->writer != NULL && cseg->writer->write_segment != NULL){   
+            queue_len = cseg->cached_list.seg_num;
+            if(cseg->writer != NULL && cseg->writer->write_segment != NULL){                  
                 pthread_mutex_unlock(&cseg->mutex);
                 //because there is only one comsumer, the first segment is safe to access without lock
-                ret = cseg->writer->write_segment(cseg, segment);
+                ret = cseg->writer->write_segment(cseg, segment, queue_len, &(cseg->consumer_active));
                 pthread_mutex_lock(&cseg->mutex);
             } 
             if(ret == 0){
@@ -501,12 +504,14 @@ static void * consumer_routine(void *arg)
     }//while(cseg->consumer_active){
     pthread_mutex_unlock(&cseg->mutex);
     
+#if 0    
     //flush all the cached segment 
     //because cseg->consumer_active is 0 which means no producer existed now, 
     //we don't need lock any more
     while((segment = get_segment_list(&(cseg->cached_list))) != NULL){
         //call writer's method
         ret = 0;
+        uint32_t queue_len = cseg->
         if(cseg->writer != NULL && cseg->writer->write_segment != NULL){                    
             ret = cseg->writer->write_segment(cseg, segment);
         }
@@ -528,7 +533,7 @@ static void * consumer_routine(void *arg)
             break;   
         }
     }
-    
+#endif    
     return NULL;    
 }
 
@@ -878,13 +883,16 @@ void release_cseg_muxer(CachedSegmentContext *cseg)
         ts_muxer_set_avio_context(cseg->ts_muxer, NULL, NULL);
         
         pthread_mutex_lock(&cseg->mutex);
+#if 0
         if(cseg->cached_list.seg_num >= cseg->max_nb_segments){
+#endif            
             if(cseg->cur_segment != NULL){
                 cached_segment_reset(cseg->cur_segment);
                 put_segment_list(&(cseg->free_list), cseg->cur_segment);
                 cseg->cur_segment = NULL;                
             }
             pthread_mutex_unlock(&cseg->mutex); 
+#if 0
         }else if(cseg->number <= 1){
             //Jam(2016-07-12): if cseg->number equals 1, 
             // means the current segment is the first segment and has not finished,
@@ -904,6 +912,7 @@ void release_cseg_muxer(CachedSegmentContext *cseg)
             pthread_mutex_unlock(&cseg->mutex);  
             append_cur_segment(cseg); // lose the control of cseg->cur_segment            
         }
+#endif
     }while(0);    //do{
           
     if(cseg->consumer_thread_id != 0){

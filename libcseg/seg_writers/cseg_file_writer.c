@@ -46,7 +46,8 @@ static int file_init(CachedSegmentContext *cseg)
 
 
 #define MAX_FILE_NAME 1024
-static int file_write_segment(CachedSegmentContext *cseg, CachedSegment *segment)
+static int file_write_segment(CachedSegmentContext *cseg, CachedSegment *segment, uint32_t queue_len,
+                              volatile int *consumer_active)
 {
     char base_name[MAX_FILE_NAME];
     char file_name[MAX_FILE_NAME];

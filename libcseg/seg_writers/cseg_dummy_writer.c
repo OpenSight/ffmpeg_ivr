@@ -39,7 +39,8 @@ static int dummy_init(CachedSegmentContext *cseg)
     return 0;
 }
 
-static int dummy_write_segment(CachedSegmentContext *cseg, CachedSegment *segment)
+static int dummy_write_segment(CachedSegmentContext *cseg, CachedSegment *segment, uint32_t queue_len, 
+                               volatile int *consumer_active)
 {
     
     //sleep(60);

@@ -28,6 +28,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <sys/time.h>
+#include <time.h>
     
 #include "../min_cached_segment.h"
 #include "../utils/cJSON.h"
@@ -42,6 +43,17 @@
 
 #define MAX_FILE_NAME 128
 #define MAX_URI_LEN 1024
+
+#define HTTP_PUT_WINDOW   8192
+
+#define  IVR_NAME_FIELD_KEY  "name"
+#define  IVR_URI_FIELD_KEY  "uri"
+#define  IVR_ERR_INFO_FIELD_KEY "info"
+
+#define MAX_HTTP_RESULT_SIZE  4096
+
+#define HTTP_DEFAULT_RETRY_NUM   2
+
 
 typedef struct IvrWriterPriv {
     char ivr_rest_uri[MAX_URI_LEN];
@@ -76,16 +88,6 @@ static int http_status_to_av_code(int status_code)
         
 }
 
-
-#define  IVR_NAME_FIELD_KEY  "name"
-#define  IVR_URI_FIELD_KEY  "uri"
-#define  IVR_ERR_INFO_FIELD_KEY "info"
-
-#define MAX_HTTP_RESULT_SIZE  4096
-
-#define HTTP_DEFAULT_RETRY_NUM   2
-
-
 static inline int http_need_retry(int ret)
 {
     switch(ret){
@@ -100,6 +102,15 @@ static inline int http_need_retry(int ret)
         break;
     }
     return 0;
+
+}
+
+static int64_t get_mono_ms()
+{
+	struct timespec tp;
+
+	clock_gettime(CLOCK_MONOTONIC , &tp);
+	return (int64_t)(tp.tv_sec * 1000 + tp.tv_nsec / 1000000);
 
 }
 
@@ -244,6 +255,56 @@ fail:
     return ret;
 }
 
+static int http_write_data(HTTP_SESSION_HANDLE session, 
+                           CachedSegment * segment, 
+                           int32_t io_timeout,  //in milli-seconds 
+                           int64_t upload_time, 
+                           volatile int *consumer_active)
+{
+    int32_t                  len = 0, cur_pos = 0;
+    int ret = HTTP_CLIENT_SUCCESS;
+    fragment *cur_frag = segment->head;  
+    int32_t windows_num = (segment->size + HTTP_PUT_WINDOW - 1) / HTTP_PUT_WINDOW;                       
+    int64_t windows_time = upload_time / windows_num;
+    int64_t cur_ms;
+    int64_t next_ms = get_mono_ms() + windows_time;
+    
+    if(FRAGMENT_BUF_SIZE % HTTP_PUT_WINDOW != 0){
+        return HTTP_CLIENT_UNKNOWN_ERROR;
+    }
+
+    while(len < segment->size){
+        int to_write = MIN(segment->size - len, HTTP_PUT_WINDOW);   
+            
+        ret  = HTTPClientWriteData(session, cur_frag->buffer + cur_pos, to_write, MSEC_TO_SEC(io_timeout));
+        if(ret != HTTP_CLIENT_SUCCESS){
+            break;
+        }        
+        len += to_write;
+        cur_pos += to_write;
+        if(cur_pos >= FRAGMENT_BUF_SIZE){
+            cur_frag = cur_frag->next;  
+            cur_pos = 0;
+        }
+        if(len >= segment->size){
+            break; // return at once finished
+        }
+        
+        //wait for next windows
+        if(*consumer_active){
+            usleep(1000);
+            while(*consumer_active && (cur_ms = get_mono_ms()) < next_ms){
+                int to_sleep_ms = MIN(50, next_ms - cur_ms); 
+                usleep(to_sleep_ms * 1000);
+            }     
+        }
+        
+        next_ms += windows_time;  //next windows
+    } //   while(len < segment->size){
+        
+    return ret;
+}
+
 #define DUMMY_RESP_BUF_LEN   256
 static int http_put(HTTP_SESSION_HANDLE session,
                     char * http_uri, 
@@ -251,14 +312,15 @@ static int http_put(HTTP_SESSION_HANDLE session,
                     char * content_type, 
                     CachedSegment * segment,
                     int32_t  retries,
+                    int64_t upload_time, 
+                    volatile int *consumer_active, 
                     int * status_code)
 {
 
     int ret = 0;
     HTTP_CLIENT             HTTPClient;
-    int32_t                  len = 0;
     uint32_t                  nSize = 0, nTotal = 0;
-    fragment *cur_frag;    
+  
     char segment_size_str[32];
     char dummy_resp_buf[DUMMY_RESP_BUF_LEN];    
     
@@ -314,27 +376,7 @@ static int http_put(HTTP_SESSION_HANDLE session,
         }     
     
         /* upload the segment */
-        len = 0;
-        cur_frag = segment->head;
-        ret = HTTP_CLIENT_SUCCESS;
-        while(len < segment->size){
-            int to_write = MIN(segment->size - len, FRAGMENT_BUF_SIZE);
-            
-            if(cur_frag == NULL){
-                fprintf(stderr, "segment is invalid");
-                ret = HTTP_CLIENT_ERROR_INVALID_HANDLE;
-                break;
-            }
-            
-            ret  = HTTPClientWriteData(session, cur_frag->buffer, to_write, MSEC_TO_SEC(io_timeout));
-            if(ret != HTTP_CLIENT_SUCCESS){
-                break;
-            }
-
-            len += to_write;
-            cur_frag = cur_frag->next;     
-        }
-    
+        ret = http_write_data(session, segment, io_timeout, upload_time, consumer_active);
         if(ret != HTTP_CLIENT_SUCCESS){
             if(http_need_retry(ret)){
                 //cleanup the current HTTP client session hanle
@@ -523,7 +565,9 @@ failed:
 static int upload_file(IvrWriterPriv * priv,
                        CachedSegment *segment, 
                        int32_t io_timeout,  //in milli-seconds
-                       char * file_uri)
+                       char * file_uri, 
+                       int64_t upload_time, 
+                       volatile int *consumer_active)
 {
     int status_code = 200;
     int ret = 0;  
@@ -531,6 +575,8 @@ static int upload_file(IvrWriterPriv * priv,
                    file_uri, io_timeout, "video/mp2t",
                    segment,
                    HTTP_DEFAULT_RETRY_NUM,
+                   upload_time, 
+                   consumer_active, 
                    &status_code);
     if(ret < 0){
         return ret;
@@ -691,13 +737,22 @@ fail:
 
 
 
-static int ivr_write_segment(CachedSegmentContext *cseg, CachedSegment *segment)
+static int ivr_write_segment(CachedSegmentContext *cseg, CachedSegment *segment, 
+                             uint32_t queue_len, volatile int *consumer_active)
 {
     IvrWriterPriv * priv = (IvrWriterPriv * )cseg->writer_priv;    
 
     char file_uri[MAX_URI_LEN];
     char filename[MAX_FILE_NAME];
     int ret = 0;
+    
+    int64_t upload_time;
+    
+    if(queue_len > 1){
+        upload_time = (int64_t)(segment->duration * 0.5) * 1000;
+    }else{
+        upload_time = (int64_t)(segment->duration * 0.8) * 1000;
+    }
     
     //get URI of the file for segment
     ret = create_file(priv, 
@@ -718,7 +773,9 @@ static int ivr_write_segment(CachedSegmentContext *cseg, CachedSegment *segment)
         ret = upload_file(priv,
                           segment, 
                           cseg->io_timeout,
-                          file_uri);                      
+                          file_uri, 
+                          upload_time, 
+                          consumer_active);                      
         if(ret == 0){
             //save the file info to IVR db
             ret = save_file(priv, 

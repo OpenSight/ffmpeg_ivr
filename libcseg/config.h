@@ -30,8 +30,8 @@
 extern "C" {
 #endif
 
-#define FRAGMENT_SIZE  65535  //64KB
-#define FRAGMENT_BUF_SIZE   (FRAGMENT_SIZE - 16)   //16Bytes is used for fragment header
+#define FRAGMENT_BUF_SIZE  65536  //64KB
+#define FRAGMENT_SIZE   (FRAGMENT_BUF_SIZE + 16)   //16Bytes is used for fragment header
 
 #define MAX_URL_SIZE 4096
 

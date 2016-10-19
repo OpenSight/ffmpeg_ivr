@@ -150,7 +150,8 @@ typedef struct CachedSegmentWriter {
     //return 0 on success, 
     //       1 on writer pause for the moment
     //       otherwise, return a negative number for error
-    int (*write_segment)(CachedSegmentContext *cseg, CachedSegment *segment);
+    int (*write_segment)(CachedSegmentContext *cseg, CachedSegment *segment,  
+                         uint32_t queue_len, volatile int *consumer_active);
     
     void (*uninit)(CachedSegmentContext *cseg);
     
