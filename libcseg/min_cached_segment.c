@@ -408,6 +408,7 @@ int append_cur_segment(CachedSegmentContext *cseg)
     pthread_mutex_lock(&cseg->mutex);        
     
     if(cseg->cached_list.seg_num >= cseg->max_nb_segments){ 
+        cseg->cache_list_congested = 1; //when cached list reach max segment, consider congested
         cseg_log(CSEG_LOG_WARNING, 
                "One Segment(size:%d, start_ts:%f, duration:%f, pos:%lld, sequence:%lld) "
                "is dropped because of slow writer\n", 
@@ -415,7 +416,18 @@ int append_cur_segment(CachedSegmentContext *cseg)
                 segment->start_ts, segment->duration, 
                 segment->pos, segment->sequence); 
         cached_segment_reset(segment);
-        put_segment_list(&(cseg->free_list), segment);         
+        put_segment_list(&(cseg->free_list), segment);  
+
+    }else if(cseg->cache_list_congested){
+        cseg_log(CSEG_LOG_WARNING, 
+               "One Segment(size:%d, start_ts:%f, duration:%f, pos:%lld, sequence:%lld) "
+               "is dropped because of cache congested\n", 
+                segment->size, 
+                segment->start_ts, segment->duration, 
+                segment->pos, segment->sequence); 
+        cached_segment_reset(segment);
+        put_segment_list(&(cseg->free_list), segment);          
+
     }else{
 /*
         cseg_log(CSEG_LOG_INFO, 
@@ -497,7 +509,9 @@ static void * consumer_routine(void *arg)
             cached_segment_reset(segment);          
             put_segment_list(&(cseg->free_list), segment);              
         }//while(cseg->cached_list.seg_num > keep_seg_num){
-            
+        
+        cseg->cache_list_congested = 0;
+        
         if(cseg->consumer_active){
             pthread_cond_wait(&(cseg->not_empty), &(cseg->mutex)); //wait for next time
         }

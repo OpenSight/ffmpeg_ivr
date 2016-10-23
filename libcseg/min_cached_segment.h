@@ -208,7 +208,10 @@ struct CachedSegmentContext {
     volatile int consumer_active;
     
     //writer pthread exit code
-    volatile int consumer_exit_code;
+    volatile int consumer_exit_code;    
+    
+    //flag to indicate cahed_list cong
+    volatile int cache_list_congested;
     
     // writer IO timeout (in milli-sec)
     int32_t io_timeout;  
@@ -221,6 +224,7 @@ struct CachedSegmentContext {
     
     //segment in cache to write
     CachedSegmentList cached_list;
+    
     
     //free segments
     CachedSegmentList free_list;
