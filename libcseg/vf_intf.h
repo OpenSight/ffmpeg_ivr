@@ -123,7 +123,9 @@ void vf_release_cseg_muxer(CachedSegmentContext *cseg);
 
 
 
-
+#ifdef __cplusplus
+}
+#endif
 
 
 #endif //VF_INTF_H
