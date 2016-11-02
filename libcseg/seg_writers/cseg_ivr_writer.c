@@ -363,7 +363,7 @@ static int http_put(HTTP_SESSION_HANDLE session,
         if((ret = HTTPClientSendRequest(session, http_uri, NULL,
                     0, FALSE, MSEC_TO_SEC(io_timeout), 0)) != HTTP_CLIENT_SUCCESS)
         {
-            if(http_need_retry(ret)){
+            if(http_need_retry(ret) && (*consumer_active)){
                 //cleanup the current HTTP client session hanle
                 HTTPClientSetConnection(session, FALSE);
                 HTTPClientReset(session);
@@ -379,7 +379,7 @@ static int http_put(HTTP_SESSION_HANDLE session,
         /* upload the segment */
         ret = http_write_data(session, segment, io_timeout, upload_time, consumer_active);
         if(ret != HTTP_CLIENT_SUCCESS){
-            if(http_need_retry(ret)){
+            if(http_need_retry(ret) && (*consumer_active)){
                 //cleanup the current HTTP client session hanle
                 HTTPClientSetConnection(session, FALSE);
                 HTTPClientReset(session);
@@ -395,7 +395,7 @@ static int http_put(HTTP_SESSION_HANDLE session,
         // Retrieve the the headers and analyze them
         if((ret = HTTPClientRecvResponse(session, MSEC_TO_SEC(io_timeout))) != HTTP_CLIENT_SUCCESS)
         {
-            if(http_need_retry(ret)){
+            if(http_need_retry(ret) && (*consumer_active)){
                 //cleanup the current HTTP client session hanle
                 HTTPClientSetConnection(session, FALSE);
                 HTTPClientReset(session);
@@ -439,7 +439,7 @@ static int http_put(HTTP_SESSION_HANDLE session,
             if(ret == HTTP_CLIENT_SUCCESS){
                 (*buf_size) = nTotal;
             }else{      
-                if(http_need_retry(ret)){
+                if(http_need_retry(ret) && (*consumer_active)){
                     //cleanup the current HTTP client session hanle
                     HTTPClientSetConnection(session, FALSE);
                     HTTPClientReset(session);
