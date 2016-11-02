@@ -785,7 +785,7 @@ static int ivr_write_segment(CachedSegmentContext *cseg, CachedSegment *segment,
 
         }else{
             //fail the file, remove it from IVR
-            ret = save_file(priv, cseg->io_timeout, filename, 0);  
+            save_file(priv, cseg->io_timeout, filename, 0);  
             priv->last_filename[0] = 0;
     
         }//if(ret == 0){
