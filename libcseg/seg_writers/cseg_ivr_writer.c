@@ -59,6 +59,7 @@ typedef struct IvrWriterPriv {
     char ivr_rest_uri[MAX_URI_LEN];
     HTTP_SESSION_HANDLE post_http_session;
     HTTP_SESSION_HANDLE upload_http_session;
+    int pre_recording;   //if it's at pre_recording state
     char last_filename[MAX_FILE_NAME];
     char http_response_buf[MAX_HTTP_RESULT_SIZE];
 } IvrWriterPriv;
@@ -716,6 +717,7 @@ static int ivr_init(CachedSegmentContext *cseg)
     priv->upload_http_session = HTTPClientOpenRequest(HTTP_CLIENT_FLAG_KEEP_ALIVE);    
     
     cseg->writer_priv = priv;
+    priv->pre_recording = 0;
     
     return 0;
     
@@ -772,10 +774,17 @@ static int ivr_write_segment(CachedSegmentContext *cseg, CachedSegment *segment,
     if(strlen(filename) == 0 || strlen(file_uri) == 0){
         ret = 1; //cannot upload at the moment
 
-        //force reconnect for next file upload
-        HTTPClientSetConnection(priv->upload_http_session, FALSE);
+        //close the http upload connection
+        if(priv->pre_recording == 0){
+            HTTPClientSetConnection(priv->upload_http_session, FALSE);
+            HTTPClientReset(priv->upload_http_session);
+            priv->pre_recording = 1;
+        }
         
     }else{    
+        
+        priv->pre_recording = 0;
+        
         //upload segment to the file URI
         ret = upload_file(priv,
                           segment, 
