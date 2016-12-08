@@ -771,6 +771,10 @@ static int ivr_write_segment(CachedSegmentContext *cseg, CachedSegment *segment,
     
     if(strlen(filename) == 0 || strlen(file_uri) == 0){
         ret = 1; //cannot upload at the moment
+
+        //force reconnect for next file upload
+        HTTPClientSetConnection(priv->upload_http_session, FALSE);
+        
     }else{    
         //upload segment to the file URI
         ret = upload_file(priv,
