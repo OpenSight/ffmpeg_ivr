@@ -802,7 +802,7 @@ FF_ENABLE_DEPRECATION_WARNINGS
                "%d:%d; previous: %"PRId64", current: %"PRId64"; ",
                ost->file_index, ost->st->index, ost->last_mux_dts, pkt->dts);
 #ifdef FFMPEG_IVR 
-        if (exit_on_error && pkt->dts)  /*jiankai: aliyun media cdn RTMP server would produce two audio frame with 0 dts at first*/
+        if (exit_on_error && pkt->dts){  /*jiankai: aliyun media cdn RTMP server would produce two audio frame with 0 dts at first*/
 #else
         if (exit_on_error) {
 #endif
