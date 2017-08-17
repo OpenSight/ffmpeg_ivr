@@ -672,6 +672,14 @@ static int cseg_write_packet(AVFormatContext *s, AVPacket *pkt)
     }
 
     if (cseg->start_pts == AV_NOPTS_VALUE) {
+        //check the start frame must be the key video frame
+        if (cseg->has_video){
+            if(st->codec->codec_type != AVMEDIA_TYPE_VIDEO ||
+                (pkt->flags & AV_PKT_FLAG_KEY) == 0){
+                //drop the audio frame or non-key video frame
+                return 0;
+            }
+        }
         cseg->start_pts = pkt->pts;
         if(cseg->start_pts != AV_NOPTS_VALUE){
             //start_pts is ready, check start_ts
