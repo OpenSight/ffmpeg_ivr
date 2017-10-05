@@ -12,11 +12,6 @@ AM_LDFLAGS = $(libcurl_LIBS) $(libavformat_LIBS) $(libavutil_LIBS) \
 
 SUBDIRS = libffmpeg_ivr . 
 
-if INCLUDE_LIBCSEG
-SUBDIRS += libcseg
-endif
-
-
 bin_PROGRAMS = ffmpeg_ivr
 
 ffmpeg_ivr_SOURCES = src/cmdutils.c \

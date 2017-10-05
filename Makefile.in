@@ -34,7 +34,6 @@ PRE_UNINSTALL = :
 POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
-@INCLUDE_LIBCSEG_TRUE@am__append_1 = libcseg
 bin_PROGRAMS = ffmpeg_ivr$(EXEEXT)
 subdir = .
 DIST_COMMON = $(am__configure_deps) $(srcdir)/Makefile.am \
@@ -109,7 +108,7 @@ AM_RECURSIVE_TARGETS = $(RECURSIVE_TARGETS:-recursive=) \
 	distdir dist dist-all distcheck
 ETAGS = etags
 CTAGS = ctags
-DIST_SUBDIRS = libffmpeg_ivr . libcseg
+DIST_SUBDIRS = $(SUBDIRS)
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
 distdir = $(PACKAGE)-$(VERSION)
 top_distdir = $(distdir)
@@ -291,7 +290,7 @@ AM_LDFLAGS = $(libcurl_LIBS) $(libavformat_LIBS) $(libavutil_LIBS) \
     $(libavcodec_LIBS) $(libavfilter_LIBS) $(libswscale_LIBS) $(libswresample_LIBS) \
     $(libavdevice_LIBS)
 
-SUBDIRS = libffmpeg_ivr . $(am__append_1)
+SUBDIRS = libffmpeg_ivr . 
 ffmpeg_ivr_SOURCES = src/cmdutils.c \
     src/cmdutils.h \
     src/cmdutils_common_opts.h \

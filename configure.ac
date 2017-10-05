@@ -22,13 +22,6 @@ AC_CONFIG_SRCDIR([src/ffmpeg_ivr.c])
 AC_CONFIG_HEADERS([config.h])
 
 
-AC_ARG_WITH([libcseg], 
-[AS_HELP_STRING([--with-libcseg], 
-[would build the libcseg library @<:@default=no@:>@])], 
-[libcseg_library=${withval}], [libcseg_library=no]) 
-
-AM_CONDITIONAL([INCLUDE_LIBCSEG], [test "x$libcseg_library" = xyes])
-
 
 # Checks for programs.
 AC_PROG_CXX
@@ -129,10 +122,7 @@ AC_DEFINE([FFMPEG_IVR], [1], [identify in ffmpeg_ivr compilation context])
 # generate Makefiles 
 AC_CONFIG_FILES([Makefile \
                  libffmpeg_ivr/Makefile \
-                 libffmpeg_ivr/libffmpeg_ivr.pc \
-                 libcseg/Makefile \
-                 libcseg/samples/Makefile \
-                 libcseg/libcseg.pc])
+                 libffmpeg_ivr/libffmpeg_ivr.pc])
 
 # Generate other makefiles
 
@@ -149,9 +139,6 @@ ffmpeg_ivr exec prefix ................ : $exec_prefix
 ffmpeg_ivr library path ............... : $libdir
 ffmpeg_ivr include path ............... : $includedir
 ffmpeg_ivr program path ............... : $bindir
-
-libcseg library included............. : $libcseg_library
-
 
 
 
