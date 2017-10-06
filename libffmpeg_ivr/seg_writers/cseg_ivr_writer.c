@@ -57,8 +57,8 @@
 
 
 typedef struct IvrWriterPriv {
+    CURL * easyhandle;
     char ivr_rest_uri[MAX_URI_LEN];
-    int pre_recording;   //if it's at pre_recording state
     char last_filename[MAX_FILE_NAME];
     char http_response_buf[MAX_HTTP_RESULT_SIZE];
 } IvrWriterPriv;
@@ -117,7 +117,8 @@ static size_t http_read_callback(char *ptr, size_t size, size_t nmemb, void *use
     return data_size;
 }
 
-static int http_post(char * http_uri, 
+static int http_post(CURL * easyhandle,
+                     char * http_uri, 
                      int32_t io_timeout,  //in milli-seconds 
                      char * post_content_type, 
                      char * post_data, int post_len,
@@ -125,7 +126,6 @@ static int http_post(char * http_uri,
                      int * status_code,
                      char * result_buf, int *buf_size)
 {
-    CURL * easyhandle = NULL;
     int ret = 0;
     struct curl_slist *headers=NULL;
     char content_type_header[128];
@@ -134,6 +134,7 @@ static int http_post(char * http_uri,
     char err_buf[CURL_ERROR_SIZE] = "unknown";
     CURLcode curl_res = CURLE_OK;
 
+    memset(&http_buf, 0, sizeof(HttpBuf));  
     
     if(retries <= 0){
         retries =  HTTP_DEFAULT_RETRY_NUM;       
@@ -147,69 +148,65 @@ static int http_post(char * http_uri,
         headers = curl_slist_append(headers, content_type_header);
 
     }   
+    curl_easy_reset(easyhandle);
+    
+    if(curl_easy_setopt(easyhandle, CURLOPT_ERRORBUFFER, err_buf)){
+        ret = AVERROR_EXTERNAL;
+        goto fail;               
+    }    
+
+    if(curl_easy_setopt(easyhandle, CURLOPT_URL, http_uri)){
+        ret = AVERROR_EXTERNAL;
+        goto fail;
+    }   
+        
+    if(headers != NULL){
+        if(curl_easy_setopt(easyhandle, CURLOPT_HTTPHEADER, headers)){
+            ret = AVERROR_EXTERNAL;
+            goto fail;               
+        }            
+    }
+    if(curl_easy_setopt(easyhandle, CURLOPT_POSTFIELDS, post_data)){
+        ret = AVERROR_EXTERNAL;
+        goto fail;          
+    }  
+    if(curl_easy_setopt(easyhandle, CURLOPT_POSTFIELDSIZE, post_len)){
+        ret = AVERROR_EXTERNAL;
+        goto fail;             
+    }  
+
+    if(io_timeout > 0){
+        if(curl_easy_setopt(easyhandle, CURLOPT_TIMEOUT_MS , io_timeout)){
+            ret = AVERROR_EXTERNAL;
+            goto fail;                  
+        }
+    } 
+    if(result_buf != NULL && buf_size != NULL && (*buf_size) != 0){
+        http_buf.buf = result_buf;
+        http_buf.buf_size = (*buf_size);
+        http_buf.pos = 0;
+            
+        if(curl_easy_setopt(easyhandle, CURLOPT_WRITEFUNCTION, http_write_callback)){
+            ret = AVERROR_EXTERNAL;
+            goto fail;             
+        }
+        if(curl_easy_setopt(easyhandle, CURLOPT_WRITEDATA, &http_buf)){
+            ret = AVERROR_EXTERNAL;
+            goto fail;                
+        }
+    }  
+
+ #ifdef ENABLE_CURLOPT_VERBOSE   
+    if(curl_easy_setopt(easyhandle, CURLOPT_VERBOSE, 1)){
+        ret = AVERROR_EXTERNAL;
+        goto fail;               
+    }    
+ #endif
         
     while(retries-- > 0){
-        memset(&http_buf, 0, sizeof(HttpBuf));   
         ret = 0;
         strcpy(err_buf, "unknown");
-        
-        easyhandle = curl_easy_init();
-        if(easyhandle == NULL){
-            ret = AVERROR(ENOMEM);
-            break;
-        }
-
-        if(curl_easy_setopt(easyhandle, CURLOPT_URL, http_uri)){
-            ret = AVERROR_EXTERNAL;
-            break;                
-        }   
-        
-        if(headers != NULL){
-            if(curl_easy_setopt(easyhandle, CURLOPT_HTTPHEADER, headers)){
-                ret = AVERROR_EXTERNAL;
-                break;                
-            }            
-        }
-        if(curl_easy_setopt(easyhandle, CURLOPT_POSTFIELDS, post_data)){
-            ret = AVERROR_EXTERNAL;
-            break;            
-        }  
-        if(curl_easy_setopt(easyhandle, CURLOPT_POSTFIELDSIZE, post_len)){
-            ret = AVERROR_EXTERNAL;
-            break;              
-        }  
-
-        if(io_timeout > 0){
-            if(curl_easy_setopt(easyhandle, CURLOPT_TIMEOUT_MS , io_timeout)){
-                ret = AVERROR_EXTERNAL;
-                break;                
-            }
-        } 
-        if(result_buf != NULL && buf_size != NULL && (*buf_size) != 0){
-            http_buf.buf = result_buf;
-            http_buf.buf_size = (*buf_size);
-            http_buf.pos = 0;
-            
-            if(curl_easy_setopt(easyhandle, CURLOPT_WRITEFUNCTION, http_write_callback)){
-                ret = AVERROR_EXTERNAL;
-                break;                
-            }
-            if(curl_easy_setopt(easyhandle, CURLOPT_WRITEDATA, &http_buf)){
-                ret = AVERROR_EXTERNAL;
-                break;                
-            }
-        }  
-
-        if(curl_easy_setopt(easyhandle, CURLOPT_ERRORBUFFER, err_buf)){
-            ret = AVERROR_EXTERNAL;
-            break;                
-        }
- #ifdef ENABLE_CURLOPT_VERBOSE   
-        if(curl_easy_setopt(easyhandle, CURLOPT_VERBOSE, 1)){
-            ret = AVERROR_EXTERNAL;
-            break;                
-        }    
- #endif
+        http_buf.pos = 0;
         
         if((curl_res = curl_easy_perform(easyhandle)) != CURLE_OK){
             ret = AVERROR_EXTERNAL;            
@@ -217,8 +214,6 @@ static int http_post(char * http_uri,
                 break;
             }else{
                 //retry
-                curl_easy_cleanup(easyhandle);  
-                easyhandle = NULL;
                 random_msleep(); //sleep random 1 ~ 50 ms
                 continue;
             }
@@ -239,7 +234,6 @@ static int http_post(char * http_uri,
         break;   // successful, then exit the loop
     }//while(retries-- > 0){
     
-
     
 fail:    
     if(ret < 0){
@@ -249,21 +243,20 @@ fail:
         curl_slist_free_all(headers);
         headers = NULL;
     }
-    if(easyhandle != NULL){
-        curl_easy_cleanup(easyhandle);   
-        easyhandle = NULL;
-    }
+    
+    curl_easy_reset(easyhandle);   
+
     return ret;
 }
 
-static int http_put(char * http_uri, 
+static int http_put(CURL * easyhandle,
+                    char * http_uri, 
                     int32_t io_timeout,  //in milli-seconds 
                     char * content_type, 
                     char * buf, int buf_size,
                     int32_t retries,
                     int * status_code)
 {
-    CURL * easyhandle = NULL;
     int ret = 0;
     struct curl_slist *headers=NULL;
     char content_type_header[128];
@@ -276,7 +269,8 @@ static int http_put(char * http_uri,
     if(retries <= 0){
         retries =  HTTP_DEFAULT_RETRY_NUM;       
     }    
-
+    
+    memset(&http_buf, 0, sizeof(HttpBuf));
 
     if(content_type != NULL){
         memset(content_type_header, 0, 128);
@@ -289,75 +283,69 @@ static int http_put(char * http_uri,
     strcpy(expect_header, "Expect:");
     headers = curl_slist_append(headers, expect_header);   
 
-    while(retries-- > 0){
-        memset(&http_buf, 0, sizeof(HttpBuf));
-        ret = 0;
-        strcpy(err_buf, "unknown");
-    
-    
-        easyhandle = curl_easy_init();
-        if(easyhandle == NULL){
-            ret = AVERROR(ENOMEM);
-            break;
-        }
+    curl_easy_reset(easyhandle);
 
-        if(curl_easy_setopt(easyhandle, CURLOPT_URL, http_uri)){
-            ret = AVERROR_EXTERNAL;
-            break;             
-        }   
+    if(curl_easy_setopt(easyhandle, CURLOPT_ERRORBUFFER, err_buf)){
+        ret = AVERROR_EXTERNAL;
+        goto fail;               
+    }
+
+    if(curl_easy_setopt(easyhandle, CURLOPT_URL, http_uri)){
+        ret = AVERROR_EXTERNAL;
+        goto fail;                 
+    }   
         
-        if(curl_easy_setopt(easyhandle, CURLOPT_UPLOAD, 1L)){
-            ret = AVERROR_EXTERNAL;
-            break;              
-        }   
+    if(curl_easy_setopt(easyhandle, CURLOPT_UPLOAD, 1L)){
+        ret = AVERROR_EXTERNAL;
+        goto fail;                 
+    }   
     
   
-
-       if(curl_easy_setopt(easyhandle, CURLOPT_HTTPHEADER, headers)){
-            ret = AVERROR_EXTERNAL;
-            break;               
-        }
+    if(curl_easy_setopt(easyhandle, CURLOPT_HTTPHEADER, headers)){
+        ret = AVERROR_EXTERNAL;
+        goto fail;                   
+    }
        
-        if(curl_easy_setopt(easyhandle, CURLOPT_INFILESIZE, buf_size)){
-            ret = AVERROR_EXTERNAL;
-            break;              
-        }    
+    if(curl_easy_setopt(easyhandle, CURLOPT_INFILESIZE, buf_size)){
+        ret = AVERROR_EXTERNAL;
+        goto fail;                  
+    }    
 
-        if(io_timeout > 0){
-            if(curl_easy_setopt(easyhandle, CURLOPT_TIMEOUT_MS , io_timeout)){
-                ret = AVERROR_EXTERNAL;
-                break;               
-            }
-        }   
+    if(io_timeout > 0){
+        if(curl_easy_setopt(easyhandle, CURLOPT_TIMEOUT_MS , io_timeout)){
+            ret = AVERROR_EXTERNAL;
+            goto fail;                   
+        }
+    }   
     
-        if(buf != NULL && buf_size != 0){
-            http_buf.buf = buf;
-            http_buf.buf_size = buf_size;
-            http_buf.pos = 0;
+    if(buf != NULL && buf_size != 0){
+        http_buf.buf = buf;
+        http_buf.buf_size = buf_size;
+        http_buf.pos = 0;
             
-            if(curl_easy_setopt(easyhandle, CURLOPT_READFUNCTION, http_read_callback)){
-                ret = AVERROR_EXTERNAL;
-                break;                
-            }
-            if(curl_easy_setopt(easyhandle, CURLOPT_READDATA, &http_buf)){
-                ret = AVERROR_EXTERNAL;
-                break;               
-            }
-        }
-    
-
-        if(curl_easy_setopt(easyhandle, CURLOPT_ERRORBUFFER, err_buf)){
+        if(curl_easy_setopt(easyhandle, CURLOPT_READFUNCTION, http_read_callback)){
             ret = AVERROR_EXTERNAL;
-            break;               
+            goto fail;                   
         }
-
+        if(curl_easy_setopt(easyhandle, CURLOPT_READDATA, &http_buf)){
+            ret = AVERROR_EXTERNAL;
+            goto fail;                   
+        }
+    }
+    
         
 #ifdef ENABLE_CURLOPT_VERBOSE   
-        if(curl_easy_setopt(easyhandle, CURLOPT_VERBOSE, 1)){
-            ret = AVERROR_EXTERNAL;
-            break;                
-        }    
+    if(curl_easy_setopt(easyhandle, CURLOPT_VERBOSE, 1)){
+        ret = AVERROR_EXTERNAL;
+        goto fail;                    
+    }    
 #endif
+
+    while(retries-- > 0){
+        
+        ret = 0;
+        strcpy(err_buf, "unknown");
+        http_buf.pos = 0;  
         
         if((curl_res = curl_easy_perform(easyhandle)) != CURLE_OK){
             ret = AVERROR_EXTERNAL;            
@@ -365,8 +353,6 @@ static int http_put(char * http_uri,
                 break;
             }else{
                 //retry
-                curl_easy_cleanup(easyhandle);  
-                easyhandle = NULL;
                 random_msleep(); //sleep random 1 ~ 50 ms
                 continue;
             }
@@ -391,12 +377,10 @@ fail:
 
     if(headers != NULL){
         curl_slist_free_all(headers);
-    }
-    
-    if(easyhandle != NULL){
-        curl_easy_cleanup(easyhandle);   
-        easyhandle = NULL;
-    }  
+        headers = NULL;
+    }    
+
+    curl_easy_reset(easyhandle);   
     
     return ret;
 }
@@ -450,7 +434,8 @@ static int create_file(IvrWriterPriv * priv,
     post_data_str[MAX_POST_STR_LEN] = 0;
 
     //issue HTTP request
-    ret = http_post(priv->ivr_rest_uri, 
+    ret = http_post(priv->easyhandle,
+                    priv->ivr_rest_uri, 
                     io_timeout,
                     NULL, 
                     post_data_str, strlen(post_data_str), 
@@ -510,13 +495,15 @@ failed:
     return ret;
 }
 
-static int upload_file(CachedSegment *segment, 
+static int upload_file(IvrWriterPriv * priv,
+                       CachedSegment *segment, 
                        int32_t io_timeout, 
                        char * file_uri)
 {
     int status_code = 200;
     int ret = 0;  
-    ret = http_put(file_uri, io_timeout, "video/mp2t",
+    ret = http_put(priv->easyhandle, 
+                   file_uri, io_timeout, "video/mp2t",
                    segment->buffer, segment->size, 
                    HTTP_DEFAULT_RETRY_NUM,
                    &status_code);
@@ -527,7 +514,8 @@ static int upload_file(CachedSegment *segment,
     // but try again we can get the correct result
     if(status_code >= 400){ //try to reconnect for one more time
         random_msleep();        
-        ret = http_put(file_uri, io_timeout, "video/mp2t",
+        ret = http_put(priv->easyhandle, 
+                   file_uri, io_timeout, "video/mp2t",
                    segment->buffer, segment->size, 
                    HTTP_DEFAULT_RETRY_NUM,
                    &status_code);
@@ -570,7 +558,8 @@ static int save_file( IvrWriterPriv * priv,
     post_data_str[MAX_POST_STR_LEN] = 0;
     
     //issue HTTP request
-    ret = http_post(priv->ivr_rest_uri, 
+    ret = http_post(priv->easyhandle,
+                    priv->ivr_rest_uri, 
                     io_timeout,
                     NULL, 
                     post_data_str, strlen(post_data_str), 
@@ -654,7 +643,13 @@ static int ivr_init(CachedSegmentContext *cseg)
         goto fail;
     }  
 
-    priv->pre_recording = 0;      
+    priv->easyhandle = curl_easy_init();
+    if(priv->easyhandle == NULL){
+        ret = AVERROR(ENOMEM);
+        goto fail;
+    }
+
+    
     cseg->writer_priv = priv;
   
     
@@ -662,7 +657,11 @@ static int ivr_init(CachedSegmentContext *cseg)
     
 fail:
  
-    if(priv != NULL){    
+    if(priv != NULL){  
+        if(priv->easyhandle != NULL){
+            curl_easy_cleanup(priv->easyhandle); 
+            priv->easyhandle = NULL;
+        }
         av_free(priv);
         priv = NULL;
     }
@@ -703,16 +702,10 @@ static int ivr_write_segment(CachedSegmentContext *cseg, CachedSegment *segment)
     if(strlen(filename) == 0 || strlen(file_uri) == 0){
         ret = 1; //cannot upload at the moment
         
-        //close the http upload connection
-        if(priv->pre_recording == 0){
-            priv->pre_recording = 1;
-        }        
-        
     }else{    
-        priv->pre_recording = 0;
         
         //upload segment to the file URI
-        ret = upload_file(segment, 
+        ret = upload_file(priv, segment, 
                           cseg->writer_timeout,
                           file_uri);                      
         if(ret == 0){
@@ -748,6 +741,11 @@ static void ivr_uninit(CachedSegmentContext *cseg)
             save_file(priv, FILE_CREATE_TIMEOUT, 
                       priv->last_filename, 1);   
             priv->last_filename[0] = 0;
+        }
+
+        if(priv->easyhandle != NULL){
+            curl_easy_cleanup(priv->easyhandle); 
+            priv->easyhandle = NULL;
         }
     
         av_free(priv);  
