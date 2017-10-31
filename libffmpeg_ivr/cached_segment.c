@@ -512,7 +512,11 @@ static int cseg_write_header(AVFormatContext *s)
     cseg->filename = av_strdup(s->filename);
     cseg->out_buffer = av_malloc(SEGMENT_IO_BUFFER_SIZE);
     init_segment_list(&cseg->cached_list);
-    init_segment_list(&cseg->free_list);    
+    init_segment_list(&cseg->free_list);   
+    cseg->last_mux_dts = (int64_t *)av_malloc(sizeof(int64_t) * s->nb_streams);
+    for (i = 0; i < s->nb_streams; i++) {
+        cseg->last_mux_dts[i] = AV_NOPTS_VALUE;
+    }
 
     if ((ret = cseg_mux_init(s)) < 0)
         goto fail;
@@ -596,6 +600,10 @@ fail:
             av_freep(&cseg->out_buffer);
         }
         
+        if(cseg->last_mux_dts != NULL){
+            av_freep(&cseg->last_mux_dts);
+        }
+        
         av_freep(&cseg->filename);
         
         if(cseg->format_options){
@@ -648,6 +656,7 @@ static int cseg_write_packet(AVFormatContext *s, AVPacket *pkt)
     CachedSegmentContext *cseg = (CachedSegmentContext *)s->priv_data;
     AVFormatContext *oc = cseg->avf;
     AVStream *st = s->streams[pkt->stream_index];
+    int64_t * last_mux_dts = cseg->last_mux_dts + pkt->stream_index;
     int64_t end_pts = cseg->recording_time * cseg->number;
     int is_ref_pkt = 1;
     int ret, can_split = 1;
@@ -671,15 +680,18 @@ static int cseg_write_packet(AVFormatContext *s, AVPacket *pkt)
         return AVERROR_EXIT;
     }
 
-    if (cseg->start_pts == AV_NOPTS_VALUE) {
-        //check the start frame must be the key video frame
-        if (cseg->has_video){
-            if(st->codec->codec_type != AVMEDIA_TYPE_VIDEO ||
-                (pkt->flags & AV_PKT_FLAG_KEY) == 0){
+    //check the start frame must be the key video frame
+    if (cseg->start_pts == AV_NOPTS_VALUE && cseg->has_video) {
+        
+        if(st->codec->codec_type != AVMEDIA_TYPE_VIDEO ||
+            (pkt->flags & AV_PKT_FLAG_KEY) == 0){
                 //drop the audio frame or non-key video frame
-                return 0;
-            }
+            return 0;
         }
+    }//if (cseg->start_pts == AV_NOPTS_VALUE && cseg->has_video) 
+    
+    //set start_pts & start_ts for cseg
+    if (cseg->start_pts == AV_NOPTS_VALUE) {
         cseg->start_pts = pkt->pts;
         if(cseg->start_pts != AV_NOPTS_VALUE){
             //start_pts is ready, check start_ts
@@ -697,7 +709,8 @@ static int cseg_write_packet(AVFormatContext *s, AVPacket *pkt)
             }//if(cseg->start_ts < 0.0){
         }//if(cseg->start_pts != AV_NOPTS_VALUE){
     }//if (cseg->start_pts == AV_NOPTS_VALUE) {
-        
+    
+    //set start_pts & start_ts for the current segment if absent
     if(cseg->cur_segment->start_pts == AV_NOPTS_VALUE){
         cseg->cur_segment->start_pts = pkt->pts;
         if(cseg->cur_segment->start_pts != AV_NOPTS_VALUE && 
@@ -705,6 +718,26 @@ static int cseg_write_packet(AVFormatContext *s, AVPacket *pkt)
             cseg->cur_segment->start_ts = cseg->start_ts;          
         }        
     }
+    
+    //correct dts/pts in case of non-strict monotonous
+    if( (st->codec->codec_type == AVMEDIA_TYPE_VIDEO || st->codec->codec_type == AVMEDIA_TYPE_AUDIO) &&
+        pkt->dts != AV_NOPTS_VALUE &&
+        (*last_mux_dts) != AV_NOPTS_VALUE) {
+        int64_t max = (*last_mux_dts) + 1;
+        if (pkt->dts < max) {
+            int loglevel = max - pkt->dts > 2 || st->codec->codec_type == AVMEDIA_TYPE_VIDEO ? AV_LOG_WARNING : AV_LOG_DEBUG;
+            av_log(s, loglevel, "Non-monotonous DTS in output stream "
+                   "%d; previous: %"PRId64", current: %"PRId64"; ", 
+                   st->index, (*last_mux_dts), pkt->dts);
+            av_log(s, loglevel, "changing to %"PRId64". This may result "
+                   "in incorrect timestamps in the output file.\n",
+                   max);
+            if(pkt->pts >= pkt->dts)
+                pkt->pts = FFMAX(pkt->pts, max);
+            pkt->dts = max;
+        }
+    }
+    (*last_mux_dts) = pkt->dts;
     
    
     if (cseg->has_video) {
@@ -839,6 +872,10 @@ static int cseg_write_trailer(struct AVFormatContext *s)
     if(cseg->out_buffer != NULL){
         av_freep(&cseg->out_buffer);
     }   
+
+    if(cseg->last_mux_dts != NULL){
+        av_freep(&cseg->last_mux_dts);
+    }    
     
     if(cseg->format_options){
         av_dict_free(&cseg->format_options);            
@@ -881,7 +918,7 @@ AVOutputFormat ff_cached_segment_muxer = {
     .priv_data_size = sizeof(CachedSegmentContext),
     .audio_codec    = AV_CODEC_ID_AAC,
     .video_codec    = AV_CODEC_ID_H264,
-    .flags          = AVFMT_NOFILE | AVFMT_ALLOW_FLUSH,
+    .flags          = AVFMT_NOFILE | AVFMT_ALLOW_FLUSH | AVFMT_TS_NONSTRICT,
     .write_header   = cseg_write_header,
     .write_packet   = cseg_write_packet,
     .write_trailer  = cseg_write_trailer,

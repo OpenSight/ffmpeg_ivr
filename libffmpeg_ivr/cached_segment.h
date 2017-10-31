@@ -151,6 +151,9 @@ struct CachedSegmentContext {
     CachedSegmentWriter *writer;
     void * writer_priv;
     int32_t writer_timeout;
+    
+    int64_t *last_mux_dts;    // last mux dts
+    
 };
 
 extern AVOutputFormat ff_cached_segment_muxer;
