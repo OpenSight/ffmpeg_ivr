@@ -817,6 +817,9 @@ static int cseg_write_trailer(struct AVFormatContext *s)
                 cseg->cur_segment = NULL;                
             }
             pthread_mutex_unlock(&cseg->mutex); 
+            
+//Jam(2018-01-12): remove this logic, keep the first and unfinished segment
+/*            
         }else if(cseg->number <= 1){
             //Jam(2016-07-12): if cseg->number equals 1, 
             // means the current segment is the first segment and has not finished,
@@ -830,6 +833,7 @@ static int cseg_write_trailer(struct AVFormatContext *s)
             pthread_mutex_unlock(&cseg->mutex);   
             av_log(s, AV_LOG_ERROR,
                     "drop the current single unfinished segment\n");           
+*/ 
 
         }else{
             
