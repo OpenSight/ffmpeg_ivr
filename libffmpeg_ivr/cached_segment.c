@@ -690,6 +690,20 @@ static int cseg_write_packet(AVFormatContext *s, AVPacket *pkt)
         }
     }//if (cseg->start_pts == AV_NOPTS_VALUE && cseg->has_video) 
     
+    //terminated if extradata has been changed
+    if(pkt->flags & AV_PKT_FLAG_KEY){
+        int side_size = 0;
+        uint8_t * side = av_packet_get_side_data(pkt, AV_PKT_DATA_NEW_EXTRADATA, &side_size);
+        if(side != NULL){
+            if(side_size != st->codec->extradata_size || 
+               memcmp(side, st->codec->extradata, side_size) != 0){
+                av_log(s, AV_LOG_ERROR, 
+                        "Not suppot for extradata change when recording mpegts\n");      
+                return AVERROR_EXIT;
+            }
+        }//if(side != NULL)
+    }//if(pkt->flags & AV_PKT_FLAG_KEY)
+    
     //set start_pts & start_ts for cseg
     if (cseg->start_pts == AV_NOPTS_VALUE) {
         cseg->start_pts = pkt->pts;
