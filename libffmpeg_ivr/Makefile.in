@@ -78,7 +78,8 @@ libffmpeg_ivr_la_LIBADD =
 am__dirstamp = $(am__leading_dot)dirstamp
 am_libffmpeg_ivr_la_OBJECTS = register.lo cached_segment.lo cJSON.lo \
 	seg_writers/cseg_dummy_writer.lo \
-	seg_writers/cseg_file_writer.lo seg_writers/cseg_ivr_writer.lo
+	seg_writers/cseg_file_writer.lo seg_writers/cseg_ivt_writer.lo \
+	seg_writers/cseg_ivr_writer.lo
 libffmpeg_ivr_la_OBJECTS = $(am_libffmpeg_ivr_la_OBJECTS)
 AM_V_lt = $(am__v_lt_$(V))
 am__v_lt_ = $(am__v_lt_$(AM_DEFAULT_VERBOSITY))
@@ -274,6 +275,7 @@ libffmpeg_ivr_la_SOURCES = register.c \
     cJSON.h \
     seg_writers/cseg_dummy_writer.c \
     seg_writers/cseg_file_writer.c \
+    seg_writers/cseg_ivt_writer.c \
     seg_writers/cseg_ivr_writer.c
 
 libffmpeg_ivr_la_LDFLAGS = -version-info 0:0:0 $(AM_LDFLAGS)   
@@ -355,6 +357,8 @@ seg_writers/cseg_dummy_writer.lo: seg_writers/$(am__dirstamp) \
 	seg_writers/$(DEPDIR)/$(am__dirstamp)
 seg_writers/cseg_file_writer.lo: seg_writers/$(am__dirstamp) \
 	seg_writers/$(DEPDIR)/$(am__dirstamp)
+seg_writers/cseg_ivt_writer.lo: seg_writers/$(am__dirstamp) \
+	seg_writers/$(DEPDIR)/$(am__dirstamp)
 seg_writers/cseg_ivr_writer.lo: seg_writers/$(am__dirstamp) \
 	seg_writers/$(DEPDIR)/$(am__dirstamp)
 libffmpeg_ivr.la: $(libffmpeg_ivr_la_OBJECTS) $(libffmpeg_ivr_la_DEPENDENCIES) 
@@ -368,6 +372,8 @@ mostlyclean-compile:
 	-rm -f seg_writers/cseg_file_writer.lo
 	-rm -f seg_writers/cseg_ivr_writer.$(OBJEXT)
 	-rm -f seg_writers/cseg_ivr_writer.lo
+	-rm -f seg_writers/cseg_ivt_writer.$(OBJEXT)
+	-rm -f seg_writers/cseg_ivt_writer.lo
 
 distclean-compile:
 	-rm -f *.tab.c
@@ -378,6 +384,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@seg_writers/$(DEPDIR)/cseg_dummy_writer.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@seg_writers/$(DEPDIR)/cseg_file_writer.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@seg_writers/$(DEPDIR)/cseg_ivr_writer.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@seg_writers/$(DEPDIR)/cseg_ivt_writer.Plo@am__quote@
 
 .c.o:
 @am__fastdepCC_TRUE@	$(AM_V_CC)depbase=`echo $@ | sed 's|[^/]*$$|$(DEPDIR)/&|;s|\.o$$||'`;\
