@@ -502,37 +502,63 @@ static int upload_file(IvrWriterPriv * priv,
 {
     int status_code = 200;
     int ret = 0;  
-    ret = http_put(priv->easyhandle, 
-                   file_uri, io_timeout, "video/mp2t",
-                   segment->buffer, segment->size, 
-                   HTTP_DEFAULT_RETRY_NUM,
-                   &status_code);
-    if(ret){
-        return ret;
-    }
-    //Jam(2017-1-2): for some time, Aliyun OSS would return a error status for a normal operation, 
-    // but try again we can get the correct result
-    if(status_code >= 400){ //try to reconnect for one more time
-        random_msleep();        
+    AVIOContext *file_context;
+    
+    if(strncmp(file_uri, "http://", 7) == 0){
+        //for http upload
+    
         ret = http_put(priv->easyhandle, 
-                   file_uri, io_timeout, "video/mp2t",
-                   segment->buffer, segment->size, 
-                   HTTP_DEFAULT_RETRY_NUM,
-                   &status_code);
+                       file_uri, io_timeout, "video/mp2t",
+                       segment->buffer, segment->size, 
+                       HTTP_DEFAULT_RETRY_NUM,
+                       &status_code);
         if(ret){
             return ret;
         }
-    } 
-    
-    if(status_code < 200 || status_code >= 300){
-        ret = http_status_to_av_code(status_code);
-        av_log(NULL, AV_LOG_ERROR,  "[cseg_ivr_writer] http upload file failed with status(%d)\n", 
-                   status_code);       
-        goto fail;
+        //Jam(2017-1-2): for some time, Aliyun OSS would return a error status for a normal operation, 
+        // but try again we can get the correct result
+        if(status_code >= 400){ //try to reconnect for one more time
+            random_msleep();        
+            ret = http_put(priv->easyhandle, 
+                       file_uri, io_timeout, "video/mp2t",
+                       segment->buffer, segment->size, 
+                       HTTP_DEFAULT_RETRY_NUM,
+                       &status_code);
+            if(ret){
+                return ret;
+            }
+        } 
+        
+        if(status_code < 200 || status_code >= 300){
+            ret = http_status_to_av_code(status_code);
+            av_log(NULL, AV_LOG_ERROR,  "[cseg_ivr_writer] http upload file failed with status(%d)\n", 
+                       status_code);       
+            return ret;
+        } 
+    }else{
+        //for file system
+        ret = avio_open(&file_context, file_uri, AVIO_FLAG_WRITE);
+        if(ret < 0){
+            av_log(NULL, AV_LOG_ERROR,  "[cseg_ivr_writer] open fs file failed, avio_open() failed with ret(%d)\n", 
+                       ret);  
+            return ret;
+        }
+        
+        avio_write(file_context, segment->buffer, segment->size);
+        ret = file_context->error;
+        avio_closep(&file_context);
+        
+        if(ret < 0){
+            
+            av_log(NULL, AV_LOG_ERROR,  "[cseg_ivr_writer] write fs file failed, avio_write() failed with ret(%d)\n", 
+                       ret); 
+            return ret;
+        }
     }
+    
     return 0;
-fail:
-    return ret;
+
+    
 }
 
 static int save_file( IvrWriterPriv * priv,
