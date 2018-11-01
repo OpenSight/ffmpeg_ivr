@@ -3907,7 +3907,7 @@ static int process_input(int file_index)
     
     if (force_dts_monotonicity &&
         pkt.dts != AV_NOPTS_VALUE &&
-        ist.dts != AV_NOPTS_VALUE &&
+        ist->dts != AV_NOPTS_VALUE &&
         (ist->dec_ctx->codec_type == AVMEDIA_TYPE_VIDEO || ist->dec_ctx->codec_type == AVMEDIA_TYPE_AUDIO)) {
         // adjust the incoming packet by the accumulated monotonicity error
         int64_t pkt_dts = av_rescale_q(pkt.dts, ist->st->time_base, AV_TIME_BASE_Q);
