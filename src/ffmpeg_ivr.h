@@ -272,7 +272,8 @@ typedef struct InputStream {
      * several frames in a packet) of the next frame in current packet (in AV_TIME_BASE units) */
     int64_t       next_dts;
     int64_t       dts;       ///< dts of the last packet read for this stream (in AV_TIME_BASE units)
-
+    
+    
     int64_t       next_pts;  ///< synthetic pts for the next decode frame (in AV_TIME_BASE units)
     int64_t       pts;       ///< current pts of the decoded frame  (in AV_TIME_BASE units)
     int           wrap_correction_done;
@@ -368,8 +369,6 @@ typedef struct InputFile {
     int thread_queue_size;      /* maximum number of queued packets */
 #endif
 
-    // A value added to inbound timestamps to prevent them from going "backward" in cases such as HLS discontinuities
-    int64_t ff_timestamp_monotonicity_offset;
 
 #ifdef FFMPEG_IVR
     struct timespec io_start_ts;    
@@ -513,7 +512,6 @@ extern char *sdp_filename;
 extern float audio_drift_threshold;
 extern float dts_delta_threshold;
 extern float dts_error_threshold;
-extern int dts_monotonicity_threshold;
 extern int force_dts_monotonicity;
 
 extern int audio_volume;

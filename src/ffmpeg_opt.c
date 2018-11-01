@@ -95,7 +95,6 @@ char *sdp_filename;
 float audio_drift_threshold = 0.1;
 float dts_delta_threshold   = 10;
 float dts_error_threshold   = 3600*30;
-int dts_monotonicity_threshold = AV_TIME_BASE;
 int force_dts_monotonicity = 0;
 
 int audio_volume      = 256;
@@ -1038,7 +1037,6 @@ static int open_input_file(OptionsContext *o, const char *filename)
     f->recording_time = o->recording_time;
     f->input_ts_offset = o->input_ts_offset;
     f->ts_offset  = o->input_ts_offset - (copy_ts ? (start_at_zero && ic->start_time != AV_NOPTS_VALUE ? ic->start_time : 0) : timestamp);
-    f->ff_timestamp_monotonicity_offset = 0;
     f->nb_streams = ic->nb_streams;
     f->rate_emu   = o->rate_emu;
     f->accurate_seek = o->accurate_seek;
@@ -3152,8 +3150,6 @@ const OptionDef options[] = {
         "audio pad", "" },
     { "force_dts_monotonicity", OPT_BOOL | OPT_EXPERT,               { &force_dts_monotonicity },
         "correct dts monotonicity errors" },
-    { "dts_monotonicity_threshold",    HAS_ARG | OPT_INT | OPT_EXPERT,{ &dts_monotonicity_threshold },
-        "dts correction threshold for forward jumps", "microseconds" },
     { "dts_delta_threshold", HAS_ARG | OPT_FLOAT | OPT_EXPERT,       { &dts_delta_threshold },
         "timestamp discontinuity delta threshold", "threshold" },
     { "dts_error_threshold", HAS_ARG | OPT_FLOAT | OPT_EXPERT,       { &dts_error_threshold },
