@@ -3919,7 +3919,7 @@ static int process_input(int file_index)
                 delta   = pkt_dts - ist->dts + 1000;            
             }
             ifile->ts_offset -= delta;
-            av_log(NULL, AV_LOG_DEBUG,
+            av_log(NULL, AV_LOG_WARNING,
                        "timestamp discontinuity %"PRId64", new offset= %"PRId64"\n",
                        delta, ifile->ts_offset);
             pkt.dts -= av_rescale_q(delta, AV_TIME_BASE_Q, ist->st->time_base);
