@@ -545,6 +545,9 @@ extern const HWAccel hwaccels[];
 
 #ifdef FFMPEG_IVR
 extern int input_io_timeout;
+extern int64_t output_io_bw;
+extern int64_t cur_sec;
+extern int64_t cur_bytes;
 int input_interrupt_cb(void *arg);
 void input_start_io(InputFile *f);
 void input_stop_io(InputFile *f);

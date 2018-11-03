@@ -834,7 +834,25 @@ FF_ENABLE_DEPRECATION_WARNINGS
                 pkt->size
               );
     }
-
+    
+#ifdef FFMPEG_IVR
+    /* IO output bandwidth control */
+    if(output_io_bw){
+        cur_bytes += pkt->size;
+        if(cur_bytes >= output_io_bw){
+            struct timespec cur_ts;
+            clock_gettime(CLOCK_MONOTONIC, &cur_ts);
+            if(cur_sec == cur_ts.tv_sec){
+                // wait for next sec
+                useconds_t left = (1000000000 - cur_ts.tv_nsec) /1000 + 1;
+                usleep(left);
+                cur_ts.tv_sec++;
+            }
+            cur_bytes = 0; 
+            cur_sec = cur_ts.tv_sec;
+        }
+    }
+#endif
     ret = av_interleaved_write_frame(s, pkt);
     if (ret < 0) {
         print_error("av_interleaved_write_frame()", ret);
