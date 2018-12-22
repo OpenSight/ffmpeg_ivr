@@ -492,6 +492,7 @@ int input_interrupt_cb(void *arg)
         uint64_t io_dur = (cur_ts.tv_sec - f->io_start_ts.tv_sec) * 1000 +
               (cur_ts.tv_nsec - f->io_start_ts.tv_nsec) / 1000000;       
         if(io_dur >= (uint64_t)input_io_timeout){
+            av_log(NULL, AV_LOG_ERROR, "Input IO Timeout( >=%d ms)=\n", input_io_timeout);
             return 1;
         }
     }    
