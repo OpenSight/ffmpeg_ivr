@@ -537,7 +537,7 @@ static int upload_file(IvrWriterPriv * priv,
         } 
     }else{
         //for file system
-        ret = avio_open(&file_context, file_uri, AVIO_FLAG_WRITE);
+        ret = avio_open(&file_context, file_uri, AVIO_FLAG_WRITE | AVIO_FLAG_DIRECT);
         if(ret < 0){
             av_log(NULL, AV_LOG_ERROR,  "[cseg_ivr_writer] open fs file failed, avio_open() failed with ret(%d)\n", 
                        ret);  
