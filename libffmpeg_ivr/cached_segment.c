@@ -38,7 +38,8 @@
     
 #include "cached_segment.h"
 
-
+void avpriv_set_pts_info(AVStream *s, int pts_wrap_bits,
+                         unsigned int pts_num, unsigned int pts_den);
 
 #define SEGMENT_IO_BUFFER_SIZE 32768
 #define MAX_URL_SIZE 4096
