@@ -28,6 +28,10 @@
 #include <math.h>
 #include <stdio.h>
 #include <curl/curl.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <errno.h>
 
 #include "libavutil/avstring.h"
 #include "libavutil/opt.h"
@@ -502,6 +506,7 @@ static int upload_file(IvrWriterPriv * priv,
 {
     int status_code = 200;
     int ret = 0;  
+    int fd;
     AVIOContext *file_context;
     
     if(strncmp(file_uri, "http://", 7) == 0){
@@ -537,23 +542,21 @@ static int upload_file(IvrWriterPriv * priv,
         } 
     }else{
         //for file system
-        ret = avio_open(&file_context, file_uri, AVIO_FLAG_WRITE | AVIO_FLAG_DIRECT);
-        if(ret < 0){
-            av_log(NULL, AV_LOG_ERROR,  "[cseg_ivr_writer] open fs file failed, avio_open() failed with ret(%d)\n", 
-                       ret);  
-            return ret;
+        fd = open(file_uri, O_CREAT | O_WRONLY | O_TRUNC, 0666);
+        if(fd < 0) {
+            av_log(NULL, AV_LOG_ERROR,  "[cseg_ivr_writer] open fs file failed, open() failed with errorno(%d)\n", 
+                       errno);
+            return AVERROR(errno);            
         }
-        
-        avio_write(file_context, segment->buffer, segment->size);
-        ret = file_context->error;
-        avio_closep(&file_context);
-        
-        if(ret < 0){
-            
-            av_log(NULL, AV_LOG_ERROR,  "[cseg_ivr_writer] write fs file failed, avio_write() failed with ret(%d)\n", 
-                       ret); 
-            return ret;
+        ret = write(fd, segment->buffer, segment->size);   
+        if(ret < 0) {
+            av_log(NULL, AV_LOG_ERROR,  "[cseg_ivr_writer] write fs file failed, write() failed with errno(%d)\n", 
+                       errno);
+            close(fd);
+            return AVERROR(errno); 
         }
+        fsync(fd); //jamken: critical data, flush it into disk to avoid page cache 
+        close(fd);
     }
     
     return 0;
