@@ -22,7 +22,6 @@ libffmpeg_ivr_la_SOURCES =  register.c \
     cJSON.h \
     seg_writers/cseg_dummy_writer.c \
     seg_writers/cseg_file_writer.c \
-    seg_writers/cseg_ivt_writer.c \
     seg_writers/cseg_ivr_writer.c
 
 libffmpeg_ivr_la_LDFLAGS = -version-info 0:0:0 $(AM_LDFLAGS)   

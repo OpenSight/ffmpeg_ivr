@@ -49,8 +49,7 @@ void ffmpeg_ivr_register(void)
     
     REGISTER_CSEG_WRITER(file);
     REGISTER_CSEG_WRITER(dummy);
-    REGISTER_CSEG_WRITER(ivr);    
-    REGISTER_CSEG_WRITER(ivt);    
+    REGISTER_CSEG_WRITER(ivr);     
     
     REGISTER_MUXER(cached_segment);
 
