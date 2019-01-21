@@ -74,9 +74,7 @@ void av_rotate_logger_callback(void* ptr, int level, const char* fmt, va_list vl
 #if HAVE_PTHREADS
     pthread_mutex_lock(&mutex);
 #endif
-    if(print_prefix){
-        print_time();
-    }        
+      
     av_log_format_line(ptr, level, fmt, vl, line, sizeof(line), &print_prefix);
     
     if (print_prefix && (av_log_get_flags() & AV_LOG_SKIP_REPEATED) && !strcmp(line, prev) &&
@@ -84,10 +82,17 @@ void av_rotate_logger_callback(void* ptr, int level, const char* fmt, va_list vl
         count++;
         goto end;
     }
+    if(print_prefix){        
+        print_time();
+    }      
     if (count > 0) {
         char repeat_line[LINE_SZ];
-        sprintf(repeat_line, "    Last message repeated %d times\n", count);
+        sprintf(repeat_line, "    Last message repeated %d times\n", count);        
         count = 0;
+        print_to_log(repeat_line);
+        if(print_prefix){        
+            print_time();
+        }         
     }
     strcpy(prev, line);
     print_to_log(line);
