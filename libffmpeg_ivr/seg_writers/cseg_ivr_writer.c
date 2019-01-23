@@ -559,7 +559,7 @@ static int upload_file(IvrWriterPriv * priv,
             close(fd);
             return AVERROR(errno); 
         }
-        fsync(fd); //jamken: critical data, flush it into disk to avoid page cache 
+        //fsync(fd); 
         close(fd);
     }
     
