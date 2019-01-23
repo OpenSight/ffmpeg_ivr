@@ -42,7 +42,8 @@ typedef struct CachedSegment {
     int size;
     double start_ts; /* start timestamp, in seconds */
     double duration; /* in seconds */
-    int64_t start_pts; /* start pts, in timebase */
+    int64_t start_dts; /* start dts, in timebase */
+    int64_t next_dts; /* start dts for next segment, in timebase */
     int64_t pos;
     int buffer_max_size;   
     int64_t sequence;
@@ -130,7 +131,7 @@ struct CachedSegmentContext {
     int64_t recording_time;  // segment length in 1/AV_TIME_BASE sec
     int has_video;
     int has_subtitle;
-    int64_t start_pts;    // start pts for the whole list
+    int64_t start_dts;    // start pts for the whole list
 
     int64_t start_pos;    // current segment starting position
 
@@ -153,6 +154,9 @@ struct CachedSegmentContext {
     int32_t writer_timeout;
     
     int64_t *last_mux_dts;    // last mux dts
+    
+    int64_t correct_start_dts; // for dts correction
+    int64_t correct_delta;
     
 };
 

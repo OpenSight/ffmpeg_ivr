@@ -54,11 +54,13 @@
 #define  IVR_NAME_FIELD_KEY  "name"
 #define  IVR_URI_FIELD_KEY  "uri"
 #define  IVR_ERR_INFO_FIELD_KEY "info"
+#define  IVR_NEXT_DTS_FIELD_KEY "next_dts"
 
 #define MAX_HTTP_RESULT_SIZE  4096
 
 #define ENABLE_CURLOPT_VERBOSE
 
+#define HTTP_REQUEST_TIMEOUT 10000
 
 typedef struct IvrWriterPriv {
     CURL * easyhandle;
@@ -422,17 +424,19 @@ static int create_file(IvrWriterPriv * priv,
     if(strlen(priv->last_filename) == 0){
         snprintf(post_data_str,
                 MAX_POST_STR_LEN,
-                "op=create&content_type=video%%2Fmp2t&size=%d&start=%.6f&duration=%.6f",
-                segment->size,
-                segment->start_ts, 
-                segment->duration);  
-    }else{
-        snprintf(post_data_str, 
-                 MAX_POST_STR_LEN,
-                "op=create&content_type=video%%2Fmp2t&size=%d&start=%.6f&duration=%.6f&last_file_name=%s",
+                "op=create&content_type=video%%2Fmp2t&size=%d&start=%.6f&duration=%.6f&next_dts=%lld",
                 segment->size,
                 segment->start_ts, 
                 segment->duration,
+                segment->next_dts);  
+    }else{
+        snprintf(post_data_str, 
+                 MAX_POST_STR_LEN,
+                "op=create&content_type=video%%2Fmp2t&size=%d&start=%.6f&duration=%.6f&next_dts=%lld&last_file_name=%s",
+                segment->size,
+                segment->start_ts, 
+                segment->duration,
+                segment->next_dts,
                 priv->last_filename);          
     }
     post_data_str[MAX_POST_STR_LEN] = 0;
@@ -630,6 +634,69 @@ failed:
     return ret;
 }
 
+static int get_next_dts(IvrWriterPriv * priv,
+                        int32_t io_timeout, 
+                        int64_t * next_dts)
+{
+    char post_data_str[MAX_POST_STR_LEN + 1];
+    char * http_response_json = priv->http_response_buf;
+    cJSON * json_root = NULL;
+    cJSON * json_next_dts = NULL;      
+    int ret = 0;
+    int status_code = 200;
+    int response_size = MAX_HTTP_RESULT_SIZE - 1;
+    
+    if(next_dts == NULL){
+        return 0;
+    }
+    
+    //prepare post_data
+    snprintf(post_data_str, MAX_POST_STR_LEN, "op=next_dts");  
+
+    post_data_str[MAX_POST_STR_LEN] = 0;
+
+    //issue HTTP request
+    ret = http_post(priv->easyhandle,
+                    priv->ivr_rest_uri, 
+                    io_timeout,
+                    NULL, 
+                    post_data_str, strlen(post_data_str), 
+                    HTTP_DEFAULT_RETRY_NUM,
+                    &status_code,
+                    http_response_json, &response_size);
+    if(ret){
+        goto failed;       
+    }
+
+    http_response_json[response_size] = 0;
+    
+    //parse the result
+    if(status_code >= 200 && status_code < 300){
+        json_root = cJSON_Parse(http_response_json);
+        if(json_root== NULL){
+            ret = AVERROR(EINVAL);
+            av_log(NULL, AV_LOG_ERROR,  "[cseg_ivr_writer] HTTP response Json parse failed(%s)\n", http_response_json);
+            goto failed;
+        }
+        json_next_dts = cJSON_GetObjectItem(json_root, IVR_NEXT_DTS_FIELD_KEY);
+        if(json_next_dts && json_next_dts->type == cJSON_Number && json_next_dts->valuedouble > 0.1){
+            *next_dts = (int64_t)json_next_dts->valuedouble;
+        }
+    }else{
+        /* dts correction disabled */
+        goto failed;
+        
+    }
+    
+
+failed:
+    if(json_root){
+        cJSON_Delete(json_root); 
+        json_root = NULL;
+    }
+       
+    return ret;
+}
 
 
 
@@ -677,10 +744,10 @@ static int ivr_init(CachedSegmentContext *cseg)
         ret = AVERROR(ENOMEM);
         goto fail;
     }
-
     
-    cseg->writer_priv = priv;
-  
+    cseg->writer_priv = priv;    
+    
+    get_next_dts(priv, HTTP_REQUEST_TIMEOUT, &cseg->correct_start_dts);
     
     return 0;
     
@@ -700,10 +767,6 @@ fail:
 }
 
 
-#define MAX_FILE_NAME 1024
-#define MAX_URI_LEN 1024
-
-#define FILE_CREATE_TIMEOUT 10000
 static int ivr_write_segment(CachedSegmentContext *cseg, CachedSegment *segment)
 {
     IvrWriterPriv * priv = (IvrWriterPriv * )cseg->writer_priv;   
@@ -715,7 +778,7 @@ static int ivr_write_segment(CachedSegmentContext *cseg, CachedSegment *segment)
     
     //get URI of the file for segment
     ret = create_file(priv, 
-                      FILE_CREATE_TIMEOUT,
+                      HTTP_REQUEST_TIMEOUT,
                       segment, 
                       filename, MAX_FILE_NAME,
                       file_uri, MAX_URI_LEN);
@@ -744,7 +807,7 @@ static int ivr_write_segment(CachedSegmentContext *cseg, CachedSegment *segment)
         }else{
             //fail the file, remove it from IVR
             ret = save_file(priv, 
-                            FILE_CREATE_TIMEOUT,
+                            HTTP_REQUEST_TIMEOUT,
                             filename, 0);
             priv->last_filename[0] = 0;
     
@@ -767,7 +830,7 @@ static void ivr_uninit(CachedSegmentContext *cseg)
     if(priv != NULL){
         if(strlen(priv->last_filename) != 0){
             //save the last file
-            save_file(priv, FILE_CREATE_TIMEOUT, 
+            save_file(priv, HTTP_REQUEST_TIMEOUT, 
                       priv->last_filename, 1);   
             priv->last_filename[0] = 0;
         }
