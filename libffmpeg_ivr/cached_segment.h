@@ -158,6 +158,8 @@ struct CachedSegmentContext {
     int64_t correct_start_dts; // for dts correction
     int64_t correct_delta;
     
+    int64_t fallocate_size;  // the size for fallocate buf file
+    
 };
 
 extern AVOutputFormat ff_cached_segment_muxer;

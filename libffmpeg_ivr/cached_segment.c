@@ -968,6 +968,7 @@ static int cseg_write_trailer(struct AVFormatContext *s)
 #define OFFSET(x) offsetof(CachedSegmentContext, x)
 #define E AV_OPT_FLAG_ENCODING_PARAM
 static const AVOption options[] = {
+    {"fallocate_size",  "set fallocate size for ivr writer",        OFFSET(fallocate_size),AV_OPT_TYPE_INT64,  {.i64 = 0},     0, INT64_MAX, E},
     {"start_number",  "set first number in the sequence",        OFFSET(start_sequence),AV_OPT_TYPE_INT64,  {.i64 = 0},     0, INT64_MAX, E},
     {"cseg_time",      "set segment length in seconds",           OFFSET(time),    AV_OPT_TYPE_DOUBLE,  {.dbl = 10},     0, FLT_MAX, E},
     {"cseg_list_size", "set maximum number of the cache list",  OFFSET(max_nb_segments),    AV_OPT_TYPE_INT,    {.i64 = 3},     1, INT_MAX, E},

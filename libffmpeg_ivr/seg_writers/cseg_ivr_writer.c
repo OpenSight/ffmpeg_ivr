@@ -23,6 +23,7 @@
 
 #include <float.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <pthread.h>
 #include <math.h>
@@ -30,11 +31,14 @@
 #include <curl/curl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#define _GNU_SOURCE
 #include <fcntl.h>
+#include <linux/falloc.h>
 #include <errno.h>
 
 #include "libavutil/avstring.h"
 #include "libavutil/opt.h"
+#include "libavutil/dict.h"
 
 #include "libavformat/avformat.h"
     
@@ -62,11 +66,19 @@
 
 #define HTTP_REQUEST_TIMEOUT 10000
 
+
+
 typedef struct IvrWriterPriv {
     CURL * easyhandle;
     char ivr_rest_uri[MAX_URI_LEN];
     char last_filename[MAX_FILE_NAME];
     char http_response_buf[MAX_HTTP_RESULT_SIZE];
+    
+    char cached_filename[MAX_FILE_NAME];
+    int  cached_fd;
+    int64_t cached_offset;
+    int64_t cached_file_reserve_size;
+    int64_t fallocate_size;
 } IvrWriterPriv;
 
 static void random_msleep()
@@ -392,6 +404,102 @@ fail:
 }
 
 
+static int close_cached_file(IvrWriterPriv * priv)
+{
+    if(priv->cached_fd >= 0){
+        close(priv->cached_fd);
+        priv->cached_fd = -1;
+        priv->cached_file_reserve_size = 0;
+        priv->cached_offset = 0;
+        priv->cached_filename[0] = 0;
+    }    
+    
+}
+
+static int open_cached_file(IvrWriterPriv * priv, char * filename, char * file_uri, int64_t write_size)
+{
+    int fd;
+    char file_path;
+    char * p = NULL;
+    int ret;
+    int64_t offset = 0;
+    
+    /* anylize the file_uri to */
+    p = strchr(file_uri, '?');
+    if(p){
+        AVDictionary * params = NULL;
+        ret = av_dict_parse_string(&params, p + 1, "=", "&", 0);
+        if(ret == 0){
+            //successful parse parameter string
+            AVDictionaryEntry * entry;
+            entry = av_dict_get(params, "offset", NULL, 0);
+            if(entry){
+                offset = atoll(entry->value);
+            }
+        }else{
+            av_log(NULL, AV_LOG_WARNING,  "[cseg_ivr_writer] file url(%s) parse failed\n", 
+                       file_uri);            
+        }
+        av_dict_free(&params);
+    }
+    
+    // get fd
+    if(strcmp(priv->cached_filename, filename) != 0){   
+        close_cached_file(priv); 
+      
+        if(p) *p = 0;
+        priv->cached_fd = open(file_uri, O_CREAT | O_WRONLY , 0666);
+        if(p) *p = '?';
+        if(priv->cached_fd < 0) {
+            av_log(NULL, AV_LOG_ERROR,  "[cseg_ivr_writer] open fs file failed, open() failed with errorno(%d)\n", 
+                       errno);            
+            ret = AVERROR(errno);  
+            goto failed;
+        }
+        strcpy(priv->cached_filename, filename);
+
+    }
+    fd = priv->cached_fd;
+
+    
+ 
+    if(priv->fallocate_size != 0 && offset + write_size >= priv->cached_file_reserve_size){
+        int64_t new_reserve_size = 
+            (offset + write_size + priv->fallocate_size) -
+            (offset + write_size + priv->fallocate_size) % priv->fallocate_size;
+        ret = fallocate(fd, FALLOC_FL_KEEP_SIZE, 
+                priv->cached_file_reserve_size, 
+                new_reserve_size - priv->cached_file_reserve_size);
+        if(ret){
+            av_log(NULL, AV_LOG_ERROR,  "[cseg_ivr_writer] fallocate file failed with errorno(%d)\n", 
+                       errno);            
+            ret = AVERROR(errno);  
+            goto failed;        
+        }
+        priv->cached_file_reserve_size = new_reserve_size;
+    }   
+   
+    if(offset != priv->cached_offset){
+        //seek file
+        ret = lseek(fd, offset, SEEK_SET);
+        if(ret < 0){
+            av_log(NULL, AV_LOG_ERROR,  "[cseg_ivr_writer] lseek failed errorno(%d)\n", 
+                       errno);            
+            ret = AVERROR(errno);  
+            goto failed;            
+        }
+        priv->cached_offset = offset;
+    }
+    
+    return fd;
+
+failed:
+    close_cached_file(priv);
+
+    return ret;
+}
+
+
 static int create_file(IvrWriterPriv * priv,
                        int32_t io_timeout, 
                        CachedSegment *segment, 
@@ -506,6 +614,7 @@ failed:
 static int upload_file(IvrWriterPriv * priv,
                        CachedSegment *segment, 
                        int32_t io_timeout, 
+                       char * filename,
                        char * file_uri)
 {
     int status_code = 200;
@@ -546,21 +655,17 @@ static int upload_file(IvrWriterPriv * priv,
         } 
     }else{
         //for file system
-        fd = open(file_uri, O_CREAT | O_WRONLY | O_TRUNC, 0666);
+        fd = open_cached_file(priv, filename, file_uri, segment->size);
         if(fd < 0) {
-            av_log(NULL, AV_LOG_ERROR,  "[cseg_ivr_writer] open fs file failed, open() failed with errorno(%d)\n", 
-                       errno);
             return AVERROR(errno);            
         }
         ret = write(fd, segment->buffer, segment->size);   
         if(ret < 0) {
             av_log(NULL, AV_LOG_ERROR,  "[cseg_ivr_writer] write fs file failed, write() failed with errno(%d)\n", 
                        errno);
-            close(fd);
             return AVERROR(errno); 
         }
-        //fsync(fd); 
-        close(fd);
+        priv->cached_offset += ret;
     }
     
     return 0;
@@ -745,6 +850,9 @@ static int ivr_init(CachedSegmentContext *cseg)
         goto fail;
     }
     
+    priv->fallocate_size = cseg->fallocate_size;
+    priv->cached_fd = -1;
+    
     cseg->writer_priv = priv;    
     
     get_next_dts(priv, HTTP_REQUEST_TIMEOUT, &cseg->correct_start_dts);
@@ -788,17 +896,18 @@ static int ivr_write_segment(CachedSegmentContext *cseg, CachedSegment *segment)
         goto fail;
     }
     
-    //clear filename after create
-    priv->last_filename[0] = 0;
+    priv->last_filename[0] = 0;      
    
     if(strlen(filename) == 0 || strlen(file_uri) == 0){
         ret = 1; //cannot upload at the moment
-        
+        //clear filename after create
+          
     }else{    
         
         //upload segment to the file URI
         ret = upload_file(priv, segment, 
                           cseg->writer_timeout,
+                          filename,
                           file_uri);                      
         if(ret == 0){
             //Jam: store the successful filename to send at next create
@@ -839,7 +948,8 @@ static void ivr_uninit(CachedSegmentContext *cseg)
             curl_easy_cleanup(priv->easyhandle); 
             priv->easyhandle = NULL;
         }
-    
+        close_cached_file(priv);
+        
         av_free(priv);  
         cseg->writer_priv = NULL;      
     }     
