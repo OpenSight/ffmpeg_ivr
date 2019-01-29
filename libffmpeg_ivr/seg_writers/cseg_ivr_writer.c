@@ -74,7 +74,7 @@ typedef struct IvrWriterPriv {
     char last_filename[MAX_FILE_NAME];
     char http_response_buf[MAX_HTTP_RESULT_SIZE];
     
-    char cached_filename[MAX_FILE_NAME];
+    char cached_file_path[MAX_URI_LEN];
     int  cached_fd;
     int64_t cached_offset;
     int64_t cached_file_reserve_size;
@@ -411,7 +411,7 @@ static int close_cached_file(IvrWriterPriv * priv)
         priv->cached_fd = -1;
         priv->cached_file_reserve_size = 0;
         priv->cached_offset = 0;
-        priv->cached_filename[0] = 0;
+        priv->cached_file_path[0] = 0;
     }    
     
 }
@@ -444,22 +444,22 @@ static int open_cached_file(IvrWriterPriv * priv, char * filename, char * file_u
     }
     
     // get fd
-    if(strcmp(priv->cached_filename, filename) != 0){   
+    if(p) *p = 0; //make file_uri to file_path
+    if(strcmp(priv->cached_file_path, file_uri) != 0){   
         close_cached_file(priv); 
-      
-        if(p) *p = 0;
-        priv->cached_fd = open(file_uri, O_CREAT | O_WRONLY , 0666);
-        if(p) *p = '?';
+        priv->cached_fd = open(file_uri, O_CREAT | O_WRONLY , 0666);        
         if(priv->cached_fd < 0) {
             av_log(NULL, AV_LOG_ERROR,  "[cseg_ivr_writer] open fs file failed, open() failed with errorno(%d)\n", 
                        errno);            
             ret = AVERROR(errno);  
+            if(p) *p = '?';
             goto failed;
         }
-        strcpy(priv->cached_filename, filename);
+        strcpy(priv->cached_file_path, file_uri);
 
     }
     fd = priv->cached_fd;
+    if(p) *p = '?'; //restore the file_uri
 
     
  
