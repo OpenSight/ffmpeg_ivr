@@ -575,10 +575,18 @@ static int create_file(IvrWriterPriv * priv,
         json_name = cJSON_GetObjectItem(json_root, IVR_NAME_FIELD_KEY);
         if(json_name && json_name->type == cJSON_String && json_name->valuestring){
             av_strlcpy(filename, json_name->valuestring, filename_size);
+        }else{
+            ret = AVERROR(EINVAL);
+            av_log(NULL, AV_LOG_ERROR,  "[cseg_ivr_writer] HTTP response Json for create file invalid(%s)\n", http_response_json);
+            goto failed;           
         }
         json_uri = cJSON_GetObjectItem(json_root, IVR_URI_FIELD_KEY);
         if(json_uri && json_uri->type == cJSON_String && json_uri->valuestring){
             av_strlcpy(file_uri, json_uri->valuestring, file_uri_size);
+        }else{
+            ret = AVERROR(EINVAL);
+            av_log(NULL, AV_LOG_ERROR,  "[cseg_ivr_writer] HTTP response Json for create file invalid(%s)\n", http_response_json);
+            goto failed;           
         }
     }else{
 
