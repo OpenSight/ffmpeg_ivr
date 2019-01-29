@@ -475,6 +475,7 @@ static int open_cached_file(IvrWriterPriv * priv, char * filename, char * file_u
                 av_log(NULL, AV_LOG_WARNING,  "[cseg_ivr_writer] filesystem or kernel not support fallocate, miss it\n");
                 priv->fallocate_size = 0; //disable fallocate mechanism
                 new_reserve_size = 0;
+                priv->cached_file_reserve_size = 0;
             }else{
                 av_log(NULL, AV_LOG_ERROR,  "[cseg_ivr_writer] fallocate file failed with errorno(%d)\n", 
                            errno);            
