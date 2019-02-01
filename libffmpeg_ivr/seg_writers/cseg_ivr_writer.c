@@ -20,18 +20,19 @@
 **/
 
 
-
+#define _LARGEFILE64_SOURCE 
+#define _GNU_SOURCE
 #include <float.h>
 #include <stdint.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <pthread.h>
 #include <math.h>
 #include <stdio.h>
 #include <curl/curl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#define _GNU_SOURCE
+#include <unistd.h>
+
 #include <fcntl.h>
 #include <linux/falloc.h>
 #include <errno.h>
@@ -479,7 +480,7 @@ static int open_cached_file(IvrWriterPriv * priv, char * filename, char * file_u
             }else{
                 av_log(NULL, AV_LOG_ERROR,  "[cseg_ivr_writer] fallocate file failed with errorno(%d)\n", 
                            errno);            
-                ret = AVERROR(errno);  
+                ret = AVERROR(errno)?AVERROR(errno):AVERROR(EIO);  
                 goto failed;        
             }
         }
@@ -487,13 +488,19 @@ static int open_cached_file(IvrWriterPriv * priv, char * filename, char * file_u
     }   
    
     if(offset != priv->cached_offset){
+        off64_t result_offset;
         //seek file
-        ret = lseek(fd, offset, SEEK_SET);
-        if(ret < 0){
-            av_log(NULL, AV_LOG_ERROR,  "[cseg_ivr_writer] lseek failed errorno(%d)\n", 
-                       errno);            
-            ret = AVERROR(errno);  
+        result_offset = lseek64(fd, (off64_t)offset, SEEK_SET);
+        if(result_offset < 0){
+            av_log(NULL, AV_LOG_ERROR,  "[cseg_ivr_writer] lseek offset(%lld) failed errorno(%d)\n", 
+                       (long long)offset, (int)errno);            
+            ret = AVERROR(errno)?AVERROR(errno):AVERROR_EXIT;  
             goto failed;            
+        }else if(result_offset != offset){
+            av_log(NULL, AV_LOG_ERROR,  "[cseg_ivr_writer] lseek return offset(%lld) mismatch the parameter(%lld)\n", 
+                       (long long)result_offset, (long long)offset);            
+            ret = AVERROR(EIO);  
+            goto failed;              
         }
         priv->cached_offset = offset;
     }
@@ -503,7 +510,7 @@ static int open_cached_file(IvrWriterPriv * priv, char * filename, char * file_u
 failed:
     close_cached_file(priv);
 
-    return ret;
+    return ret?ret:AVERROR_BUG;
 }
 
 
@@ -672,7 +679,7 @@ static int upload_file(IvrWriterPriv * priv,
         //for file system
         fd = open_cached_file(priv, filename, file_uri, segment->size);
         if(fd < 0) {
-            return AVERROR(errno);            
+            return fd;            
         }
         ret = write(fd, segment->buffer, segment->size);   
         if(ret < 0) {
