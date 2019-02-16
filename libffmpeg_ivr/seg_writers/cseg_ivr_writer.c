@@ -619,6 +619,8 @@ static int create_file(IvrWriterPriv * priv,
             }//if(json_root== NULL)
             
         }//if(response_size != 0)
+        av_log(NULL, AV_LOG_ERROR,  "[cseg_ivr_writer] POST data:%s\n", 
+                           post_data_str);
         goto failed;
         
     }

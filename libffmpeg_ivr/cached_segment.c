@@ -837,7 +837,7 @@ static int cseg_write_packet(AVFormatContext *s, AVPacket *pkt)
         ret = cseg_start(s);
         if (ret < 0)
             return ret;
-        cseg->cur_segment->start_ts = (double)(pkt->dts - cseg->start_dts)
+        cseg->cur_segment->start_ts = ((double)(pkt->dts - cseg->start_dts))
                                             * st->time_base.num / st->time_base.den + cseg->start_ts;        
         cseg->cur_segment->pos = cseg->start_pos;
         cseg->cur_segment->start_dts = pkt->dts;
