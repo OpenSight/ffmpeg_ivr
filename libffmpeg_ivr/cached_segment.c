@@ -885,7 +885,7 @@ static int cseg_write_trailer(struct AVFormatContext *s)
         av_freep(&(oc->pb));
         
         pthread_mutex_lock(&cseg->mutex);
-        if(cseg->cached_list.seg_num >= cseg->max_nb_segments){
+        if((cseg->flags & CSEG_FLAG_NONBLOCK) && (cseg->cached_list.seg_num >= cseg->max_nb_segments)){
             if(cseg->cur_segment != NULL){
                 cached_segment_reset(cseg->cur_segment);
                 put_segment_list(&(cseg->free_list), cseg->cur_segment);
