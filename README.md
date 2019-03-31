@@ -1,7 +1,7 @@
 # ffmpeg_ivr
-ffmpeg_ivr is an extension of FFmpeg library, it provides a library which register a new cloud-oriented media fragment muxer into the ffmpeg avformat framework, and a new application, called ffmpeg_ivr, which make use of the new library. The new muxer is usually used as a video recorder, which is able to upload the media fragments(TS format) to cloud-storage system like Aliyun OSS through HTTP, as well as save the fragments to the local filesystem like XFS。On the other hand, it also send the infomation of each fragment to the specified http server, which can generate the corresponding m3u8 list for these fragments.  
+ffmpeg_ivr is an extension of FFmpeg library, it provides a library which register a new cloud-oriented media fragment muxer into the ffmpeg avformat framework, and a new application, called ffmpeg_ivr, which make use of the new library. The new muxer is usually used as a video recorder, which is able to upload the media fragments(TS format) to cloud-storage system like Aliyun OSS through HTTP, as well as save the fragments to the local filesystem like XFS。On the other hand, it also send the infomation of each fragment to the specified http server, which can gather these meta-info the generate the corresponding m3u8 list for these fragments.  
 
-> "ivr" suffix comes from our project name, means Internet Video recorder
+> "ivr" suffix comes from our project name, means Internet Video Recorder
 
 ## Features 
 
