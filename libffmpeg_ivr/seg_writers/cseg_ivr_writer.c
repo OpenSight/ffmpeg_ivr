@@ -550,7 +550,7 @@ static int create_file(IvrWriterPriv * priv,
                 segment->size,
                 segment->start_ts, 
                 segment->duration,
-                segment->next_dts);  
+                (long long)segment->next_dts);  
     }else{
         snprintf(post_data_str, 
                  MAX_POST_STR_LEN,
@@ -558,7 +558,7 @@ static int create_file(IvrWriterPriv * priv,
                 segment->size,
                 segment->start_ts, 
                 segment->duration,
-                segment->next_dts,
+                (long long)segment->next_dts,
                 priv->last_filename);          
     }
     post_data_str[MAX_POST_STR_LEN] = 0;

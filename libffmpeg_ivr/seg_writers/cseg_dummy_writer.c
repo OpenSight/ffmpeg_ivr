@@ -57,7 +57,7 @@ static int dummy_write_segment(CachedSegmentContext *cseg, CachedSegment *segmen
            "Segment(size:%d, start_ts:%.3f, duration:%.3f, pos:%lld, sequence:%lld, start_dts:%lld, next_dts:%lld) is written\n", 
            segment->size, 
            segment->start_ts, segment->duration, 
-           segment->pos, segment->sequence, 
+           (long long)segment->pos, (long long)segment->sequence, 
            (long long)segment->start_dts,
            (long long)segment->next_dts); 
     return 0;
