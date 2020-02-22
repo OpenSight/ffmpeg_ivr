@@ -99,6 +99,7 @@ typedef struct CachedSegmentWriter {
 
 typedef enum CachedSegmentFlags {
     CSEG_FLAG_NONBLOCK = (1 << 0),
+    CSEG_FLAG_FORCE_VIDEO = (1 << 1)
 } CachedSegmentFlags;
 
 
