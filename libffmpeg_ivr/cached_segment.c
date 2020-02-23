@@ -490,6 +490,8 @@ static int cseg_write_header(AVFormatContext *s)
             s->streams[i]->codec->codec_type == AVMEDIA_TYPE_VIDEO;
         cseg->has_subtitle +=
             s->streams[i]->codec->codec_type == AVMEDIA_TYPE_SUBTITLE;
+        cseg->has_audio += 
+            s->streams[i]->codec->codec_type == AVMEDIA_TYPE_AUDIO;
     }
 
     if (cseg->has_video > 1)
@@ -502,11 +504,13 @@ static int cseg_write_header(AVFormatContext *s)
         ret = AVERROR_PATCHWELCOME;
         goto fail;        
     }
-    if((cseg->flags & CSEG_FLAG_FORCE_VIDEO) && (cseg->has_video == 0)){
-        av_log(s, AV_LOG_ERROR,
-               "No video stream to mux, but required by force_video flag\n");    
-        ret = AVERROR_INVALIDDATA;
-        goto fail;         
+    if(cseg->flags & CSEG_FLAG_FORCE_AV){
+        if ((cseg->has_video == 0) || (cseg->has_audio == 0)){
+            av_log(s, AV_LOG_ERROR,
+                   "No video or audio stream to mux, but required by force_av flag\n");    
+            ret = AVERROR_INVALIDDATA;
+            goto fail;
+        }      
     }
     
     if(cseg->time < 1.0){
@@ -986,7 +990,7 @@ static const AVOption options[] = {
     {"writer_timeout",     "set timeout (in milliseconds) of writer I/O operations", OFFSET(writer_timeout),     AV_OPT_TYPE_INT, { .i64 = 30000 },         -1, INT_MAX, .flags = E },
     {"cseg_flags",     "set flags affecting cached segement working policy", OFFSET(flags), AV_OPT_TYPE_FLAGS, {.i64 = 0 }, 0, UINT_MAX, E, "flags"},
     {"nonblock",   "never blocking in the write_packet() when the cached list is full, instead, dicard the eariest segment", 0, AV_OPT_TYPE_CONST, {.i64 = CSEG_FLAG_NONBLOCK }, 0, UINT_MAX,   E, "flags"},
-    {"force_video",   "an error would occur if the output context has no video stream", 0, AV_OPT_TYPE_CONST, {.i64 = CSEG_FLAG_FORCE_VIDEO }, 0, UINT_MAX,   E, "flags"},
+    {"force_av",   "an error would occur if the output context has no video/audio stream", 0, AV_OPT_TYPE_CONST, {.i64 = CSEG_FLAG_FORCE_AV }, 0, UINT_MAX,   E, "flags"},
 
     { NULL },
 };
